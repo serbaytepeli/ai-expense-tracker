@@ -40,6 +40,7 @@ jobs:
       backend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.backend == 'true' }}
       mobile: ${{ github.event_name != 'pull_request' || steps.filter.outputs.mobile == 'true' }}
       workflows: ${{ github.event_name != 'pull_request' || steps.filter.outputs.workflows == 'true' }}
+      contract: ${{ github.event_name != 'pull_request' || steps.filter.outputs.contract == 'true' }}
     steps:
       - name: Detect changed areas
         id: filter
@@ -59,6 +60,16 @@ jobs:
               - 'scripts/ci/**'
             workflows:
               - '.github/**'
+            # Anything that can change the OpenAPI document or the generated mobile types.
+            contract:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+              - 'scripts/ci/**'
+              - '.trivyignore'
+              - 'mobile/src/api/**'
+              - 'mobile/package.json'
+              - 'mobile/package-lock.json'
+              - '.nvmrc'
 
   workflow-lint:
     name: workflow-lint
@@ -87,7 +98,8 @@ jobs:
   backend:
     name: backend
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    # Also runs for contract changes: the contract job needs the OpenAPI document built here.
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -255,12 +267,57 @@ jobs:
       - name: Export iOS and Android bundles
         run: npm run export:check
 
+  # API contract: the mobile TypeScript types must match the OpenAPI document of the tested
+  # backend. Regenerates mobile/src/api/schema.ts and fails if it differs from Git, so a backend
+  # API change cannot reach main without the matching mobile types.
+  contract:
+    name: contract
+    needs: [changes, backend]
+    if: needs.changes.outputs.contract == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download OpenAPI document from the backend job
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: openapi
+          path: backend/build
+
+      - name: Set up Node (.nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Regenerate API types
+        working-directory: mobile
+        run: npm run api:generate
+
+      - name: Compare with the committed types
+        run: |
+          if [ -n "$(git status --porcelain -- mobile/src/api)" ]; then
+            git --no-pager diff -- mobile/src/api
+            git status --short -- mobile/src/api
+            echo "::error::mobile/src/api is out of date with the backend OpenAPI document. Run 'cd backend && ./gradlew exportOpenApi' and 'cd mobile && npm run api:generate', then commit the result."
+            exit 1
+          fi
+          echo "mobile/src/api matches the backend OpenAPI document."
+
   # The only job branch protection needs to require. Succeeds when every job above either
   # succeeded or was skipped because its area did not change; fails otherwise.
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, workflow-lint, backend, mobile]
+    needs: [changes, workflow-lint, backend, mobile, contract]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
