@@ -1,0 +1,46 @@
+# --- Secrets and local configuration ---
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+*.keystore
+!**/debug.keystore
+
+# --- Local tooling state ---
+.local/
+*.log
+logs/
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+
+# --- Backend: Java / Gradle ---
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+!backend/gradle/wrapper/gradle-wrapper.jar
+*.class
+hs_err_pid*
+
+# --- Mobile: Node / Expo / React Native ---
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/coverage/
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
+npm-debug.*
+yarn-error.*
+*.tsbuildinfo
