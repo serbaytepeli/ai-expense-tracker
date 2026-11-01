@@ -1,4 +1,5 @@
 # All backend dependency versions live here (CLAUDE.md: "Bağımlılık sürümleri gradle/libs.versions.toml'da").
+# TEMPORARY CI validation: catalog-only change
 # Libraries without a version are managed by the Spring Boot BOM.
 
 [versions]
