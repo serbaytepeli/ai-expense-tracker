@@ -1,16 +1,17 @@
 # AI Expense Tracker — API Sözleşmesi (v1)
 
-> Durum: **TASLAK — ürün sahibi onayı bekleniyor**
-> Kesin kaynak, uygulama yazıldıktan sonra backend'in ürettiği OpenAPI şemasıdır (`/v3/api-docs`). Bu belge o şemanın tasarım taslağıdır; ikisi ayrışırsa önce bu belge güncellenir.
+> Durum: **Onaylı kararlar işlendi — belge onayı bekleniyor (PR)**
+> Uygulama yazıldıktan sonra kesin kaynak, backend'in ürettiği OpenAPI şemasıdır (`/v3/api-docs`). Bu belge o şemanın tasarımıdır; API değişen her PR bu belgeyi de günceller.
 
 ## 1. Genel kurallar
 
 - Taban yol: `/api/v1`
-- Biçim: JSON, UTF-8. Alan adları `camelCase`.
-- Kimlik doğrulama: `Authorization: Bearer <accessToken>` (`/auth/*` dışındaki tüm uç noktalar).
-- Para: JSON'da **string** olarak, nokta ondalık ayraçlı, 2 basamak: `"149.90"` (kayan nokta hatasını önlemek için).
-- Tarih: `YYYY-MM-DD`; ay: `YYYY-MM`; zaman damgası: ISO 8601 UTC (`2026-11-01T10:15:30Z`).
-- Kimlikler: UUID string.
+- Biçim: JSON, UTF-8, alan adları `camelCase`.
+- Kimlik doğrulama: `Authorization: Bearer <accessToken>` — `/auth/register`, `/auth/login`, `/auth/refresh` ve `/actuator/health` dışında tüm uç noktalar.
+- Kullanıcı kimliği yalnızca belirteçten alınır; hiçbir uç nokta `userId` parametresi kabul etmez.
+- Para: JSON'da **string**, nokta ondalık ayraçlı, tam 2 basamak: `"149.90"`.
+- Tarih `YYYY-MM-DD`; ay `YYYY-MM`; zaman damgası ISO 8601 UTC (`2026-11-01T10:15:30Z`).
+- Kimlikler UUID string.
 - Sayfalama: `?page=0&size=20` (size en fazla 100). Yanıt:
   ```json
   { "items": [ ... ], "page": 0, "size": 20, "totalItems": 134, "totalPages": 7 }
@@ -25,80 +26,85 @@
   "status": 400,
   "detail": "Request contains invalid fields",
   "code": "VALIDATION_ERROR",
-  "errors": [ { "field": "amount", "message": "must be greater than 0" } ],
+  "errors": [ { "field": "date", "message": "must not be in the future" } ],
   "requestId": "b3f1..."
 }
 ```
 
 | HTTP | `code` | Ne zaman |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Alan doğrulaması başarısız |
+| 400 | `VALIDATION_ERROR` | Alan doğrulaması başarısız (ileri tarih dahil) |
 | 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` / `TOKEN_EXPIRED` | Belirteç yok/geçersiz, yanlış giriş |
 | 404 | `NOT_FOUND` | Kaynak yok **veya başka kullanıcıya ait** |
-| 409 | `EMAIL_TAKEN` / `CATEGORY_NAME_TAKEN` / `CATEGORY_PROTECTED` | Çakışma |
+| 409 | `EMAIL_TAKEN` / `CATEGORY_NAME_TAKEN` / `CATEGORY_PROTECTED` / `CATEGORY_ARCHIVED` | Çakışma |
 | 422 | `INSUFFICIENT_DATA` | AI yorumu için yeterli harcama yok |
 | 429 | `RATE_LIMITED` / `AI_DAILY_LIMIT` | Sınır aşıldı (`Retry-After` başlığıyla) |
-| 503 | `AI_UNAVAILABLE` | AI sağlayıcısı hata verdi / zaman aşımı |
+| 503 | `AI_UNAVAILABLE` | AI sağlayıcısı hata verdi, zaman aşımı veya yapılandırılmamış |
 
-## 2. Auth
+## 2. Auth (`auth` modülü)
 
 ### `POST /auth/register`
 ```json
 // istek
-{ "email": "ali@example.com", "password": "S3cure-pass", "displayName": "Ali" }
+{ "email": "ali@example.com", "password": "S3cure-pass", "displayName": "Ali",
+  "timeZone": "Europe/Istanbul" }
 // 201 yanıt
 { "accessToken": "...", "refreshToken": "...", "expiresIn": 900,
   "user": { "id": "...", "email": "ali@example.com", "displayName": "Ali",
             "currency": "TRY", "timeZone": "Europe/Istanbul", "locale": "tr-TR" } }
 ```
-Hatalar: 400, 409 `EMAIL_TAKEN`. Kayıtla birlikte hazır kategoriler oluşturulur.
+- `timeZone` isteğe bağlı (mobil cihazın saat dilimini gönderir); geçersiz veya boşsa `Europe/Istanbul`.
+- `currency` her zaman `TRY` olarak oluşturulur (D-3).
+- Hazır kategoriler aynı transaction içinde oluşturulur.
+- Hatalar: 400, 409 `EMAIL_TAKEN`, 429.
 
 ### `POST /auth/login`
-İstek `{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS`, 429.
+`{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS`, 429.
 
 ### `POST /auth/refresh`
-İstek `{ "refreshToken" }` → 200 `{ accessToken, refreshToken, expiresIn }`. Eski refresh token iptal edilir (rotasyon). Hata: 401.
+`{ "refreshToken" }` → 200 `{ accessToken, refreshToken, expiresIn }`. Eski refresh token iptal edilir (rotasyon). İptal edilmiş belirteç tekrar kullanılırsa 401 ve o kullanıcının tüm refresh token'ları iptal edilir (çalıntı belirteç koruması).
 
 ### `POST /auth/logout`
-İstek `{ "refreshToken" }` → 204.
+`{ "refreshToken" }` → 204.
 
-## 3. Kullanıcı
+## 3. Kullanıcı (`user` modülü)
 
 | Metot | Yol | Açıklama |
 |---|---|---|
 | GET | `/me` | Profil |
-| PATCH | `/me` | `displayName`, `timeZone`, `currency` güncelle (KARAR-3 kabul edilirse `currency` değiştirmek mevcut tutarları dönüştürmez; uyarı gösterilir) |
-| DELETE | `/me` | Hesabı ve tüm veriyi sil → 204 (KARAR-10) |
+| PATCH | `/me` | Yalnızca `displayName` ve `timeZone` güncellenebilir. `currency` MVP'de değiştirilemez (D-3) |
+| DELETE | `/me` | Gövde: `{ "password": "..." }`. Şifre doğruysa hesap ve tüm veri silinir → 204. Yanlış şifre → 401 `INVALID_CREDENTIALS` (FR-7) |
 
-## 4. Kategoriler
+## 4. Kategoriler (`category` modülü)
 
-### `GET /categories?includeArchived=false`
+### Kategori nesnesi
 ```json
-[ { "id": "...", "name": "Market", "icon": "cart", "color": "#4CAF50",
-    "systemKey": "GROCERIES", "sortOrder": 1, "archived": false } ]
+{ "id": "...", "name": "Market", "icon": "cart", "color": "#4CAF50",
+  "systemKey": "GROCERIES", "sortOrder": 1, "archived": false }
 ```
 
-### `POST /categories`
-`{ "name": "Evcil Hayvan", "icon": "paw", "color": "#8D6E63" }` → 201 kategori. Hatalar: 400, 409 `CATEGORY_NAME_TAKEN`.
+| Metot | Yol | Açıklama |
+|---|---|---|
+| GET | `/categories?includeArchived=false` | Kategori listesi (`sortOrder`, sonra ad sırasıyla) |
+| POST | `/categories` | `{ "name", "icon", "color" }` → 201. Hatalar: 400, 409 `CATEGORY_NAME_TAKEN` |
+| PATCH | `/categories/{id}` | `name`, `icon`, `color`, `sortOrder` → 200 |
+| POST | `/categories/{id}/archive` | → 200. `OTHER` için 409 `CATEGORY_PROTECTED` |
+| POST | `/categories/{id}/unarchive` | → 200. Aynı adda aktif kategori varsa 409 `CATEGORY_NAME_TAKEN` |
 
-### `PATCH /categories/{id}`
-Gönderilen alanlar güncellenir: `name`, `icon`, `color`, `sortOrder`. → 200.
+Kategori silme uç noktası yoktur.
 
-### `POST /categories/{id}/archive` · `POST /categories/{id}/unarchive`
-→ 200 kategori. `OTHER` kategorisini arşivleme → 409 `CATEGORY_PROTECTED`.
-
-## 5. Harcamalar
+## 5. Harcamalar (`expense` modülü)
 
 ### Harcama nesnesi
 ```json
 { "id": "...", "amount": "149.90", "currency": "TRY", "date": "2026-10-28",
-  "category": { "id": "...", "name": "Market", "icon": "cart", "color": "#4CAF50" },
+  "category": { "id": "...", "name": "Market", "icon": "cart", "color": "#4CAF50", "archived": false },
   "description": "Haftalık market", "note": null, "paymentMethod": "CARD",
   "createdAt": "2026-10-28T17:02:11Z", "updatedAt": "2026-10-28T17:02:11Z" }
 ```
 
 ### `GET /expenses`
-Sorgu parametreleri: `month=YYYY-MM` (ya da `from` + `to` tarihleri), `categoryId`, `q` (açıklamada arama, en az 2 karakter), `page`, `size`. Sıralama: `date desc, createdAt desc`. → 200 sayfalı liste.
+Parametreler: `month=YYYY-MM` **veya** `from` + `to` (ikisi dahil), `categoryId`, `q` (açıklamada arama, en az 2 karakter), `page`, `size`. Sıralama: `date desc, createdAt desc`. → 200 sayfalı liste.
 
 ### `GET /expenses/{id}` → 200 · 404
 
@@ -107,14 +113,20 @@ Sorgu parametreleri: `month=YYYY-MM` (ya da `from` + `to` tarihleri), `categoryI
 { "amount": "149.90", "date": "2026-10-28", "categoryId": "...",
   "description": "Haftalık market", "note": null, "paymentMethod": "CARD" }
 ```
-→ 201 harcama + `Location` başlığı. Doğrulama: `amount > 0`, en fazla 2 ondalık; `date` en fazla bugün + 1 yıl (KARAR-7); `categoryId` kullanıcıya ait ve aktif olmalı.
+→ 201 + `Location` başlığı.
+
+Doğrulama:
+- `amount`: > 0, en fazla 2 ondalık, en fazla `999999999999.99`.
+- `date`: zorunlu; **kullanıcının saat dilimindeki bugünden ileri olamaz** (D-7) → aksi halde 400 `VALIDATION_ERROR`, `field: "date"`.
+- `categoryId`: kullanıcıya ait olmalı (aksi 404) ve aktif olmalı (arşivliyse 409 `CATEGORY_ARCHIVED`).
+- `description` ≤ 140, `note` ≤ 500, `paymentMethod` ∈ `CASH | CARD | OTHER | null`.
 
 ### `PUT /expenses/{id}`
-POST ile aynı gövde (tam güncelleme) → 200. Arşivli bir kategoriye sahip harcama, kategorisi değiştirilmeden düzenlenebilir.
+POST ile aynı gövde ve kurallar → 200. İstisna: harcamanın mevcut kategorisi arşivliyse, kategori değiştirilmeden düzenlenebilir.
 
 ### `DELETE /expenses/{id}` → 204 · 404
 
-## 6. Raporlar
+## 6. Raporlar (`report` modülü)
 
 ### `GET /reports/monthly?month=2026-10`
 ```json
@@ -136,44 +148,79 @@ POST ile aynı gövde (tam güncelleme) → 200. Arşivli bir kategoriye sahip h
                      "categoryName": "Kira/Konut", "description": "Aidat" } ]
 }
 ```
-Notlar: `changePercent` önceki ay 0 ise `null`. `daily` ayın tüm günlerini içerir (harcama yoksa `"0.00"`). `dailyAverage` = toplam / ayın gün sayısı (içinde bulunulan ay için bugüne kadarki gün sayısı).
+- `month` kullanıcının saat dilimine göre bugünün ayından ileri olamaz → 400.
+- `changePercent` önceki değer 0 ise `null`.
+- `daily` ayın tüm günlerini içerir (içinde bulunulan ayda bugüne kadar); harcamasız günler `"0.00"`.
+- `dailyAverage` = toplam / gün sayısı (içinde bulunulan ay için bugüne kadarki gün sayısı).
+- `topExpenses` yalnızca kullanıcıya gösterim içindir; **AI'a gönderilmez**.
 
 ### `GET /reports/trend?months=6&endMonth=2026-10`
 ```json
 { "currency": "TRY", "points": [ { "month": "2026-05", "total": "9800.00" } ] }
 ```
-`months` 1–12, harcamasız aylar `"0.00"` ile döner.
+`months` 1–12; harcamasız aylar `"0.00"`.
 
-## 7. AI yorumları
+## 7. AI yorumları (`insight` modülü)
 
 ### Yorum nesnesi
 ```json
 { "id": "...", "month": "2026-10",
   "summary": "Ekim'de toplam 12.450,75 TL harcadınız; bu Eylül'e göre %13 fazla.",
-  "observations": [ "Yeme-İçme harcamanız %35 arttı.", "..." ],
-  "suggestions": [ "Haftalık dışarıda yemek bütçesi belirlemeyi deneyebilirsiniz." ],
+  "observations": [ "Yeme-İçme harcamanız %35 arttı." ],
+  "suggestions": [ "Dışarıda yemek için haftalık bir sınır belirlemeyi deneyebilirsiniz." ],
   "stale": false,
   "generatedAt": "2026-11-01T09:30:00Z",
   "disclaimer": "Bu yorum yapay zekâ tarafından üretilmiştir, finansal tavsiye değildir." }
 ```
 
 ### `GET /insights/monthly?month=2026-10`
-Kayıtlı en son yorum → 200. Yorum yoksa 404. `stale: true` → yorum oluşturulduktan sonra veri değişmiş (mobil "Güncelle" önerir).
+En son kayıtlı yorum → 200; yoksa 404. `stale: true` → yorum oluşturulduktan sonra veri değişmiş.
+Yanıt başlığı: `X-AI-Remaining-Today: <0–5>`.
 
 ### `POST /insights/monthly?month=2026-10`
-Yorum üretir veya veri değişmediyse mevcut yorumu döner. → 200 (mevcut) / 201 (yeni).
-Hatalar: 422 `INSUFFICIENT_DATA` (< 3 harcama), 429 `AI_DAILY_LIMIT`, 503 `AI_UNAVAILABLE`.
-Yanıt başlığı: `X-AI-Remaining-Today: 4`.
+Veri değişmediyse mevcut yorumu döner (200, kota düşmez); değiştiyse yeni yorum üretir (201).
+Hatalar: 422 `INSUFFICIENT_DATA` (< 3 harcama), 429 `AI_DAILY_LIMIT` (`Retry-After`: kullanıcının saat dilimine göre gece yarısına kalan saniye), 503 `AI_UNAVAILABLE`.
+Yanıt başlığı: `X-AI-Remaining-Today`.
 
-### AI sağlayıcısına giden veri (iç sözleşme, KARAR-8)
+### AI sağlayıcısına giden yük — `InsightPayload` (iç sözleşme, D-8)
+
+Yük bir izin listesiyle kurulur. Aşağıdaki alanlar **dışında hiçbir alan** eklenemez; bu, birim testiyle doğrulanır.
+
 ```json
-{ "month": "2026-10", "currency": "TRY", "locale": "tr-TR",
-  "total": "12450.75", "previousTotal": "10980.00", "expenseCount": 63,
-  "byCategory": [ { "name": "Market", "total": "3820.40", "percent": "30.68", "changePercent": "9.15" } ],
-  "topExpenses": [ { "category": "Kira/Konut", "amount": "2500.00", "description": "Aidat" } ] }
+{
+  "schemaVersion": "1",
+  "language": "tr",
+  "month": "2026-10",
+  "currency": "TRY",
+  "monthStatus": "COMPLETE",
+  "total": "12450.75",
+  "expenseCount": 63,
+  "previousMonthTotal": "10980.00",
+  "changePercentVsPreviousMonth": "13.39",
+  "sixMonthAverage": "11200.00",
+  "changePercentVsSixMonthAverage": "11.17",
+  "categories": [
+    { "label": "Market", "total": "3820.40", "percentOfTotal": "30.68",
+      "previousMonthTotal": "3500.00", "changePercentVsPreviousMonth": "9.15" }
+  ],
+  "budgetUsage": []
+}
 ```
-Ad, e-posta, kullanıcı kimliği ve `note` alanı gönderilmez.
+
+| Alan | Açıklama |
+|---|---|
+| `monthStatus` | `COMPLETE` (geçmiş ay) veya `IN_PROGRESS` (içinde bulunulan ay; AI kısmi veri olduğunu bilsin diye) |
+| `categories[].label` | Hazır kategoriler için kategori adı. Kullanıcı kategorileri için biçim açık soru **S-2**'ye bağlı (önerilen: "Özel kategori 1" gibi genel etiket) |
+| `budgetUsage` | `[{ "label", "budget", "spent", "usagePercent" }]`. Bütçe özelliği MVP'de olmadığı için **MVP'de her zaman boş dizi** (açık soru **S-1**) |
+
+**Kesinlikle gönderilmeyenler:** harcama açıklamaları, notlar, tekil harcama kayıtları/tutarları/tarihleri, ödeme yöntemi, ad, e-posta, kullanıcı kimliği, saat dilimi, cihaz bilgisi.
+
+AI'dan beklenen yanıt (yapılandırılmış JSON, sunucuda doğrulanır):
+```json
+{ "summary": "string", "observations": ["string"], "suggestions": ["string"] }
+```
+`observations` 2–4, `suggestions` 1–3 öğe; şemaya uymayan yanıt 503 olarak ele alınır.
 
 ## 8. Sağlık
 
-`GET /actuator/health` → `{ "status": "UP" }` (kimlik doğrulama gerektirmez).
+`GET /actuator/health` → `{ "status": "UP" }` (kimlik doğrulama gerektirmez; ayrıntılar yalnızca `dev` profilinde).
