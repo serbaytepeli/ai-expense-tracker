@@ -7,7 +7,8 @@ const i18next = require('eslint-plugin-i18next');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', 'coverage/*', '.expo/*', 'node_modules/*'],
+    // src/api/schema.ts is generated from the backend OpenAPI document (npm run api:generate).
+    ignores: ['dist/*', 'coverage/*', '.expo/*', 'node_modules/*', 'src/api/schema.ts'],
   },
   {
     // CLAUDE.md: no hard-coded user-facing text; every string shown in the UI comes from

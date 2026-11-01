@@ -204,8 +204,9 @@ Veritabanı şeması yalnızca Flyway migration'larıyla (`backend/src/main/reso
 |---|---|---|
 | `changes` | Her zaman | Hangi alanların değiştiğini belirler (push ve elle çalıştırmada her şey) |
 | `workflow-lint` | `.github/**` değiştiyse | `actionlint` (+ shellcheck) |
-| `backend` | `backend/**`, `ci.yml`, `scripts/ci/**`, `.trivyignore` | JDK 21 + PostgreSQL 16 servis konteyneri → `./gradlew build` (veritabanı ve Flyway testleri dahil) → test özeti ve raporlar → test edilmiş JAR'dan Docker imajı → imaj duman testi → Trivy HIGH/CRITICAL taraması |
+| `backend` | `backend/**`, `ci.yml`, `scripts/ci/**`, `.trivyignore` (ve `contract` değişikliklerinde) | JDK 21 + PostgreSQL 16 servis konteyneri → `./gradlew build` (veritabanı ve Flyway testleri dahil) → test özeti ve raporlar → test edilmiş JAR'dan Docker imajı → imaj duman testi → Trivy HIGH/CRITICAL taraması |
 | `mobile` | `mobile/**`, `.nvmrc`, `ci.yml`, `scripts/ci/**` | Node 22 → `npm ci` → lint → format → typecheck → test → `expo export` |
+| `contract` | `backend` filtresi + `mobile/src/api/**`, `mobile/package.json`, `mobile/package-lock.json`, `.nvmrc` | `backend` işinin ürettiği `openapi.json` ile `npm run api:generate` → `mobile/src/api` Git'tekiyle aynı değilse başarısız |
 | `ci-gate` | Her zaman | Yukarıdaki işlerden biri başarısız veya iptal olduysa başarısız; çalışan işler başarılıysa ve diğerleri atlandıysa başarılı |
 
 Dal korumasında zorunlu tutulacak kontroller `ci-gate` ve `security-gate`'tir. Test sayıları ve sonuçlar her çalıştırmanın **Summary** sayfasında, ayrıntılı raporlar artifact olarak (`backend-test-reports`, `openapi`) bulunur.
@@ -245,6 +246,7 @@ cd mobile && npm ci
 | `npm run typecheck` | TypeScript `strict` (`tsc --noEmit`); çeviri anahtarları da tip denetimlidir |
 | `npm test` | Jest (`jest-expo`) + React Native Testing Library |
 | `npm run export:check` | `expo export` ile iOS ve Android JavaScript paketlerini `dist/`'e üretir (yerel derleme değildir) |
+| `npm run api:generate` | `src/api/schema.ts` API tiplerini backend'in OpenAPI belgesinden (`../backend/build/openapi.json`) yeniden üretir. Önce `cd backend && ./gradlew exportOpenApi` (veritabanı gerekir) |
 
 **3. Telefonda dene (isteğe bağlı):** Telefona App Store / Google Play'den **Expo Go** kurulur, ardından:
 
@@ -266,6 +268,7 @@ mobile/
     features/          özellik mantığı (M1'den itibaren)
     i18n/              i18next kurulumu ve locales/tr.json
     theme/             renk paletleri ve useAppTheme
+    api/               schema.ts: backend OpenAPI belgesinden üretilen API tipleri (elle düzenlenmez)
   __tests__/           testler (app/ içine test konmaz)
 ```
 
