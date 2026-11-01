@@ -261,6 +261,8 @@ GROUP BY 1 ORDER BY 1;
 
 Hazır kategori listesi uygulama kodunda sabittir; migration'larda seed verisi yoktur.
 
+**Kısıt adları** açıkça verilir: `pk_<tablo>`, `fk_<tablo>_<hedef>`, `uk_<tablo>_<sütunlar>` (benzersiz kısıt ve benzersiz indeks), `ck_<tablo>_<kural>`, `ix_<tablo>_<sütunlar>`. Uygulama, veritabanı hatalarını bu adlarla API hata kodlarına eşler (ör. `uk_users_email` → `409 EMAIL_TAKEN`, `uk_categories_user_active_name` → `409 CATEGORY_NAME_TAKEN`). Zaman damgalarının veritabanı varsayılanı yoktur; değerleri uygulama enjekte edilen `Clock` ile verir.
+
 ## 10. Veritabanı testleri
 
 Gerçek PostgreSQL 16 üzerinde (architecture.md §6):

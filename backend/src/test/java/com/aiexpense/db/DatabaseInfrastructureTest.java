@@ -1,8 +1,10 @@
 package com.aiexpense.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.aiexpense.support.DatabaseIntegrationTest;
+import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.Test;
@@ -10,8 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * The application connects to PostgreSQL 16 and Flyway is active. T0.2 ships no migrations:
- * the first ones (V1-V3) arrive with T1.1 (docs/database-design.md section 9).
+ * The application connects to PostgreSQL 16 and Flyway has applied the migrations of
+ * docs/database-design.md section 9 that exist so far (V1-V3, T1.1).
  */
 class DatabaseInfrastructureTest extends DatabaseIntegrationTest {
 
@@ -39,12 +41,23 @@ class DatabaseInfrastructureTest extends DatabaseIntegrationTest {
     }
 
     @Test
-    void noApplicationTablesExistYet() {
-        Integer tables = jdbc.sql("""
-                SELECT count(*) FROM information_schema.tables
+    void migrationsV1ToV3AreApplied() {
+        assertThat(flyway.info().applied())
+                .extracting(info -> info.getVersion().getVersion(), MigrationInfo::getDescription)
+                .containsExactly(
+                        tuple("1", "create users"),
+                        tuple("2", "create auth sessions and refresh tokens"),
+                        tuple("3", "create categories"));
+    }
+
+    @Test
+    void exactlyTheT11TablesExist() {
+        List<String> tables = jdbc.sql("""
+                SELECT table_name FROM information_schema.tables
                 WHERE table_schema = current_schema()
                   AND table_name <> 'flyway_schema_history'
-                """).query(Integer.class).single();
-        assertThat(tables).isZero();
+                ORDER BY table_name
+                """).query(String.class).list();
+        assertThat(tables).containsExactly("auth_sessions", "categories", "refresh_tokens", "users");
     }
 }
