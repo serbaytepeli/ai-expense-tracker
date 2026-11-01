@@ -8,8 +8,7 @@ name: ci
 
 on:
   pull_request:
-    # TEMPORARY (T0.4 validation): also run for validation PRs into the T0.4 branch. Reverted before merge.
-    branches: [main, feat/T0.4-ci-pipeline]
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
