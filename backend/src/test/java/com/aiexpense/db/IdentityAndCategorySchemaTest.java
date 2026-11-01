@@ -13,9 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Constraints of migrations V1-V3 (docs/database-design.md sections 6 and 10) on a real
- * PostgreSQL 16 database. Every test runs in a transaction that is rolled back, so no data is
- * left behind. Violations are checked by constraint name, so a test cannot pass because of an
- * unrelated error.
+ * PostgreSQL 16 database.
+ *
+ * <p>Isolation: every test runs in one transaction that is rolled back at the end, so no data is
+ * left behind. In PostgreSQL a failed statement puts the whole transaction into the "aborted"
+ * state, where every further statement fails. Each expected violation is therefore wrapped in a
+ * SAVEPOINT and rolled back to it ({@link #assertRejected}), so a test can try several invalid
+ * values and then still check the database state. Violations are checked by constraint name or
+ * error text, so a test cannot pass because of an unrelated error.
  */
 @Transactional
 class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
@@ -45,32 +50,33 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
     void emailIsUnique() {
         insertUser("same@example.com");
 
-        assertViolation(() -> insertUser("same@example.com"), "uk_users_email");
+        assertRejected(() -> insertUser("same@example.com"), "uk_users_email");
+        assertThat(count("SELECT count(*) FROM users WHERE email = 'same@example.com'")).isOne();
     }
 
     @Test
     void emailLongerThan254CharactersIsRejected() {
         String email = "a".repeat(243) + "@example.com"; // 255 characters
 
-        assertThatThrownBy(() -> insertUser(email)).isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("character varying(254)");
+        assertRejected(() -> insertUser(email), "character varying(254)");
+        // Exactly 254 characters is accepted.
+        assertThat(insertUser("a".repeat(242) + "@example.com")).isNotNull();
     }
 
     @Test
     void passwordHashIsRequired() {
-        assertThatThrownBy(() -> jdbc.sql("""
+        assertRejected(() -> jdbc.sql("""
                 INSERT INTO users (email, password_hash, display_name, created_at, updated_at)
                 VALUES ('nohash@example.com', NULL, 'Ali', :now::timestamptz, :now::timestamptz)
-                """).param("now", NOW).update())
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("password_hash");
+                """).param("now", NOW).update(), "password_hash");
+        assertThat(count("SELECT count(*) FROM users WHERE email = 'nohash@example.com'")).isZero();
     }
 
     // --- auth_sessions / refresh_tokens ------------------------------------------------------
 
     @Test
     void sessionRequiresAnExistingUser() {
-        assertViolation(() -> insertSession(UUID.randomUUID()), "fk_auth_sessions_user");
+        assertRejected(() -> insertSession(UUID.randomUUID()), "fk_auth_sessions_user");
     }
 
     @Test
@@ -78,10 +84,13 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         UUID user = insertUser("reason@example.com");
         UUID session = insertSession(user);
 
-        assertViolation(() -> jdbc.sql("""
+        assertRejected(() -> jdbc.sql("""
                 UPDATE auth_sessions SET revoked_at = :now::timestamptz, revoke_reason = 'STOLEN'
                 WHERE id = :id
                 """).param("now", NOW).param("id", session).update(), "ck_auth_sessions_revoke_reason");
+        // The rejected update left the session active.
+        assertThat(count("SELECT count(*) FROM auth_sessions WHERE revoked_at IS NULL AND revoke_reason IS NULL AND id = '"
+                + session + "'")).isOne();
     }
 
     @Test
@@ -102,28 +111,28 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         UUID session = insertSession(insertUser("hash@example.com"));
         insertRefreshToken(session, HASH_A);
 
-        assertViolation(() -> insertRefreshToken(session, HASH_A), "uk_refresh_tokens_token_hash");
+        assertRejected(() -> insertRefreshToken(session, HASH_A), "uk_refresh_tokens_token_hash");
+        assertThat(count("SELECT count(*) FROM refresh_tokens WHERE token_hash = '" + HASH_A + "'")).isOne();
     }
 
     @Test
     void refreshTokenRequiresAnExistingSession() {
-        assertViolation(() -> insertRefreshToken(UUID.randomUUID(), HASH_A), "fk_refresh_tokens_session");
+        assertRejected(() -> insertRefreshToken(UUID.randomUUID(), HASH_A), "fk_refresh_tokens_session");
     }
 
     @Test
     void refreshTokenStoresOnlyAFixedLengthHash() {
         UUID session = insertSession(insertUser("length@example.com"));
 
-        assertThatThrownBy(() -> insertRefreshToken(session, HASH_A + "x"))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("character(64)");
+        assertRejected(() -> insertRefreshToken(session, HASH_A + "x"), "character(64)");
+        assertThat(countFor("refresh_tokens", "session_id", session)).isZero();
     }
 
     // --- categories --------------------------------------------------------------------------
 
     @Test
     void categoryRequiresAnExistingUser() {
-        assertViolation(() -> insertCategory(UUID.randomUUID(), "Market", "#4CAF50", null), "fk_categories_user");
+        assertRejected(() -> insertCategory(UUID.randomUUID(), "Market", "#4CAF50", null), "fk_categories_user");
     }
 
     @Test
@@ -131,7 +140,9 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         UUID user = insertUser("names@example.com");
         insertCategory(user, "Market", "#4CAF50", null);
 
-        assertViolation(() -> insertCategory(user, "MARKET", "#4CAF50", null), "uk_categories_user_active_name");
+        assertRejected(() -> insertCategory(user, "MARKET", "#4CAF50", null), "uk_categories_user_active_name");
+        assertRejected(() -> insertCategory(user, "market", "#4CAF50", null), "uk_categories_user_active_name");
+        assertThat(countCategories(user)).isOne();
     }
 
     @Test
@@ -158,22 +169,35 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         UUID user = insertUser("system@example.com");
         insertCategory(user, "Market", "#4CAF50", "GROCERIES");
 
-        assertViolation(() -> insertCategory(user, "Bakkal", "#4CAF50", "GROCERIES"), "uk_categories_user_system_key");
+        assertRejected(() -> insertCategory(user, "Bakkal", "#4CAF50", "GROCERIES"), "uk_categories_user_system_key");
+        assertThat(countCategories(user)).isOne();
     }
 
     @Test
     void blankCategoryNameIsRejected() {
         UUID user = insertUser("blank@example.com");
 
-        assertViolation(() -> insertCategory(user, "   ", "#4CAF50", null), "ck_categories_name_length");
+        assertRejected(() -> insertCategory(user, "   ", "#4CAF50", null), "ck_categories_name_length");
+        assertRejected(() -> insertCategory(user, "", "#4CAF50", null), "ck_categories_name_length");
+        assertThat(countCategories(user)).isZero();
     }
 
     @Test
     void colorMustBeHexRgb() {
         UUID user = insertUser("color@example.com");
 
-        assertViolation(() -> insertCategory(user, "Market", "#GGGGGG", null), "ck_categories_color");
+        assertRejected(() -> insertCategory(user, "Market", "#GGGGGG", null), "ck_categories_color");
         // CHAR(7) pads a short value with spaces, which the pattern also rejects.
+        assertRejected(() -> insertCategory(user, "Market", "#12345", null), "ck_categories_color");
+        assertRejected(() -> insertCategory(user, "Market", "4CAF50", null), "ck_categories_color");
+        // Too long for CHAR(7): rejected by the column type before the check runs.
+        assertRejected(() -> insertCategory(user, "Market", "#4CAF500", null), "character(7)");
+        assertThat(countCategories(user)).isZero();
+
+        // The transaction is still usable: valid colours in both cases are accepted.
+        insertCategory(user, "Market", "#4caf50", null);
+        insertCategory(user, "Yeme", "#4CAF50", null);
+        assertThat(countCategories(user)).isEqualTo(2);
     }
 
     @Test
@@ -181,8 +205,9 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         UUID user = insertUser("other@example.com");
         UUID other = insertCategory(user, "Diğer", "#9E9E9E", "OTHER");
 
-        assertViolation(() -> jdbc.sql("UPDATE categories SET archived_at = :now::timestamptz WHERE id = :id")
+        assertRejected(() -> jdbc.sql("UPDATE categories SET archived_at = :now::timestamptz WHERE id = :id")
                 .param("now", NOW).param("id", other).update(), "ck_categories_other_not_archived");
+        assertThat(count("SELECT count(*) FROM categories WHERE archived_at IS NULL AND id = '" + other + "'")).isOne();
     }
 
     @Test
@@ -270,15 +295,36 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
                 .query(UUID.class).single();
     }
 
+    private int countCategories(UUID userId) {
+        return countFor("categories", "user_id", userId);
+    }
+
+    private int count(String sql) {
+        // SQL is written in this class only; values come from generated UUIDs and constants.
+        return jdbc.sql(sql).query(Integer.class).single();
+    }
+
     private int countFor(String table, String column, UUID value) {
         // Table and column names come from this class only, never from input.
         return jdbc.sql("SELECT count(*) FROM " + table + " WHERE " + column + " = :v")
                 .param("v", value).query(Integer.class).single();
     }
 
-    private static void assertViolation(Runnable statement, String constraintName) {
-        assertThatThrownBy(statement::run)
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining(constraintName);
+    /**
+     * Asserts that {@code statement} is rejected by the database with an error mentioning
+     * {@code expected} (a constraint name or a column type). The statement runs inside a
+     * SAVEPOINT that is rolled back afterwards, so the test transaction is not left in
+     * PostgreSQL's aborted state and later statements in the same test still work.
+     */
+    private void assertRejected(Runnable statement, String expected) {
+        jdbc.sql("SAVEPOINT expected_violation").update();
+        try {
+            assertThatThrownBy(statement::run)
+                    .isInstanceOf(DataIntegrityViolationException.class)
+                    .hasMessageContaining(expected);
+        } finally {
+            jdbc.sql("ROLLBACK TO SAVEPOINT expected_violation").update();
+            jdbc.sql("RELEASE SAVEPOINT expected_violation").update();
+        }
     }
 }
