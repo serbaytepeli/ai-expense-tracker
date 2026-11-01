@@ -1,0 +1,22 @@
+# Gitleaks configuration (docs/architecture.md section 6.3). Used by security.yml.
+#
+# Policy:
+# - The default Gitleaks rules apply in full (useDefault = true). Rules are never disabled.
+# - An allowlist entry is added only for a confirmed false positive, scoped as narrowly as
+#   possible (one path and/or one exact pattern), with a comment saying WHAT it is, WHY it is
+#   not a secret, WHO approved it and WHEN. A real secret is never allowlisted: it is removed
+#   from the history and rotated.
+# - Tests use obviously fake values (for example "hunter2-fake", "test-key-not-real") that do
+#   not match any Gitleaks rule; the full history was scanned clean when this file was created.
+
+title = "AI Expense Tracker"
+
+[extend]
+useDefault = true
+
+# No allowlist entries. Template for a future, reviewed exception:
+#
+# [[allowlists]]
+# description = "<what> is not a secret because <why>. Approved by <who> on <yyyy-mm-dd>."
+# paths = ['''^path/to/exact/file\.ext$''']
+# regexes = ['''<exact value pattern>''']

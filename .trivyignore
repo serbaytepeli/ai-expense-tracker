@@ -1,0 +1,16 @@
+# Trivy ignore list (docs/architecture.md section 6.3). Read by every Trivy scan in CI
+# (image scan in ci.yml, dependency scan and self-test in security.yml).
+#
+# Policy: a finding is ignored only when it is confirmed not to affect this project or no
+# fixed version exists yet, and only temporarily. Every entry MUST have:
+#   - a comment above it: package, why it does not apply / why it cannot be fixed now,
+#     who accepted it and when, and the tracking issue or PR;
+#   - an expiry date with `exp:YYYY-MM-DD` (Trivy stops ignoring it after that date).
+# Entries without a reason or without an expiry date are not accepted in review.
+#
+# Example:
+#   # example-lib 1.2.3 (backend): vulnerable code path not used; fix in 1.2.4 not released yet.
+#   # Accepted by <owner> on 2026-11-01, tracked in #<n>.
+#   CVE-0000-00000 exp:2026-12-01
+#
+# No accepted findings.
