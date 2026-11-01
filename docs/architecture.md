@@ -41,7 +41,7 @@ ai-expense-tracker/
 ├── docs/
 ├── scripts/
 │   ├── check-env.sh            # Ortamda gereken araçları ve izinleri raporlar
-│   ├── dev-db.sh               # Destekleniyorsa kullanıcı dizininde PostgreSQL kümesi başlatır
+│   ├── dev-db.sh               # Destekleniyorsa depo dışındaki ayrı bir dizinde PostgreSQL kümesi başlatır
 │   └── ci/                     # CI'da kullanılan küçük betikler (ör. tarayıcı öz-testleri)
 ├── backend/
 │   ├── build.gradle.kts  settings.gradle.kts  gradlew  gradle/wrapper/
@@ -199,7 +199,7 @@ CI'da mobil doğrulama: lint, tip kontrolü, Jest ve `npx expo export` (JavaScri
 | Ortam | Nerede | Veritabanı | Rolü |
 |---|---|---|---|
 | `ci` | GitHub Actions (ubuntu runner) | `services: postgres:16` | **Doğruluk kaynağı.** Bir değişiklik ancak burada yeşilse doğrulanmış sayılır |
-| `cloud-dev` | Claude Code Cloud oturumu | Ortam destekliyorsa `scripts/dev-db.sh` ile kullanıcı dizininde PostgreSQL kümesi; desteklemiyorsa yok | Hızlı geri bildirim. Ortamın PostgreSQL sunduğu **varsayılmaz**: `scripts/check-env.sh` her oturumda kontrol eder |
+| `cloud-dev` | Claude Code Cloud oturumu | Ortam destekliyorsa `scripts/dev-db.sh` ile depo dışındaki ayrı bir dizinde PostgreSQL kümesi; desteklemiyorsa yok | Hızlı geri bildirim. Ortamın PostgreSQL sunduğu **varsayılmaz**: `scripts/check-env.sh` her oturumda kontrol eder |
 | `local` (isteğe bağlı) | Docker olan bir makine | `docker compose` | Zorunlu değil |
 | `prod` | MVP sonrası (D-11) | — | — |
 

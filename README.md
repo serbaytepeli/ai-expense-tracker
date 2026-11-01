@@ -32,12 +32,23 @@ Ayrıntılar:
 ## Depo yapısı
 
 ```
-backend/      Spring Boot uygulaması (T0.2'de oluşturulacak)
-mobile/       Expo uygulaması (T0.3'te oluşturulacak)
+backend/      Spring Boot uygulaması
+mobile/       Expo uygulaması
 scripts/      Geliştirme ortamı betikleri
 docs/         Tasarım belgeleri
-.github/      GitHub Actions iş akışları (T0.4–T0.6'da eklenecek)
+.github/      GitHub Actions iş akışları ve Dependabot
 ```
+
+M0 görevleri ([`docs/development-plan.md`](docs/development-plan.md) §3, bu sırayla):
+
+| Görev | Kapsam |
+|---|---|
+| T0.1 | Depo yapısı, `scripts/check-env.sh`, `scripts/dev-db.sh` (bu README) |
+| T0.2 | Backend iskeleti (`backend/`) |
+| T0.3 | Mobil iskelet (`mobile/`) |
+| T0.4 | CI hattı: `.github/workflows/ci.yml`, `backend/Dockerfile`, isteğe bağlı `docker-compose.yml` |
+| T0.5 | Güvenlik hattı: `security.yml`, `codeql.yml`, `dependabot.yml`, `.gitleaks.toml`, `.trivyignore` |
+| T0.6 | Sözleşme kontrolü: `ci.yml` içindeki `contract` işi, `npm run api:generate` |
 
 ## Geliştirme ortamı
 
@@ -75,7 +86,9 @@ Diğer komutlar:
 | `scripts/dev-db.sh status` | Sunucu çalışıyor mu |
 | `scripts/dev-db.sh env` | `DB_*` ve `TEST_DB_*` değişkenlerini yazdırır |
 | `scripts/dev-db.sh stop` | Sunucuyu durdurur |
-| `scripts/dev-db.sh destroy --yes` | Sunucuyu durdurur ve tüm verisini siler |
+| `scripts/dev-db.sh destroy --yes` | Sunucuyu durdurur ve tüm verisini siler (aşağıdaki güvenlik kurallarıyla) |
+
+Durum dizini güvenliği: Betik her komutta durum dizinini doğrular. `/`, sistem dizinleri (`/usr`, `/var`, `/tmp` …), ev dizini, depo kökü, depo içindeki veya depoyu içeren dizinler ve göreli yollar reddedilir. `destroy` yalnızca betiğin oluşturduğu `.aiexpense-dev-db` işaret dosyasını taşıyan ve içinde yalnızca betiğin oluşturduğu girdiler (`data`, `socket`, `postgres.log`, `credentials.env`) bulunan dizini siler.
 
 Ayarlar: `DEV_DB_PORT` (varsayılan `5433`), `DEV_DB_STATE_DIR` (root için `/var/tmp/aiexpense-pg`, diğer kullanıcılar için `~/.local/share/aiexpense-pg`), `PG_BIN`.
 
@@ -87,9 +100,22 @@ Ayarlar: `DEV_DB_PORT` (varsayılan `5433`), `DEV_DB_STATE_DIR` (root için `/va
 
 Tüm değişkenler [`.env.example`](.env.example) dosyasında açıklanmıştır. Gerçek değerler (şifre, `JWT_SECRET`, `ANTHROPIC_API_KEY`) **asla commit edilmez**. `.env` dosyası git tarafından yok sayılır.
 
+#### Mobil uygulamanın backend adresi (`EXPO_PUBLIC_API_BASE_URL`)
+
+`.env.example`'daki `http://127.0.0.1:8080/api/v1` yalnızca uygulamanın **backend ile aynı makinede** çalıştığı durumlarda işe yarar. `127.0.0.1` her cihazda "cihazın kendisi" demektir.
+
+| Uygulamanın çalıştığı yer | Kullanılacak adres |
+|---|---|
+| Backend ile aynı makinedeki iOS simülatörü veya web | `http://127.0.0.1:8080/api/v1` |
+| Android emülatörü | `http://10.0.2.2:8080/api/v1` (emülatörden ana makineye özel adres) |
+| Gerçek telefon (Expo Go), aynı yerel ağ | Backend'i çalıştıran bilgisayarın yerel ağ IP'si, ör. `http://192.168.1.20:8080/api/v1`. Backend yalnızca `127.0.0.1`'i dinliyorsa telefon erişemez; backend'in ağ arayüzünü dinlemesi ve güvenlik duvarının izin vermesi gerekir |
+| Gerçek telefon, backend Claude Code Cloud'da | Bulut oturumu telefondan doğrudan erişilebilir değildir. Herkese açık bir tünel adresi veya dağıtılmış bir backend gerekir. Hangisinin kullanılacağı, cihazda backend ile deneme yapılacak ilk görevde (M1) kararlaştırılacak |
+
+`EXPO_PUBLIC_` önekli değerler uygulama paketine gömülür ve **gizli değildir**; bu değişkene asla anahtar veya şifre yazılmaz. M0 sonundaki Expo Go denemesi backend'e bağlanmayı gerektirmez (yalnızca boş ekranlar).
+
 ### Backend ve mobil komutları
 
-T0.2 (backend) ve T0.3 (mobil) tamamlandığında bu bölüme eklenecek.
+Backend (T0.2) ve mobil (T0.3) iskeletleriyle eklenecek; M0 kapanışında doğrulanmış komutlarla güncellenecek.
 
 ## Katkı kuralları
 

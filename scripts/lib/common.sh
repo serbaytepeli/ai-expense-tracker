@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Shared helpers for scripts/*.sh. Source this file; do not execute it.
 
-# Locate the PostgreSQL server binaries (initdb, pg_ctl, postgres).
+# PostgreSQL binaries that scripts/dev-db.sh runs from one directory.
+PG_REQUIRED_TOOLS=(initdb pg_ctl postgres psql)
+
+# Locate a directory holding every tool in PG_REQUIRED_TOOLS as an executable file.
 # Search order: $PG_BIN, PATH, common install locations for major version 16.
 # Prints the directory on success, returns 1 if not found.
+# This only checks that the files exist and are executable; pg_tools_runnable()
+# checks that they actually run.
 find_pg_bindir() {
   local candidates=()
   if [[ -n "${PG_BIN:-}" ]]; then
@@ -20,14 +25,40 @@ find_pg_bindir() {
     /opt/homebrew/opt/postgresql@16/bin
     /usr/local/opt/postgresql@16/bin
   )
-  local dir
+  local dir tool complete
   for dir in "${candidates[@]}"; do
-    if [[ -x "$dir/initdb" && -x "$dir/pg_ctl" && -x "$dir/postgres" ]]; then
+    complete=1
+    for tool in "${PG_REQUIRED_TOOLS[@]}"; do
+      if [[ ! -f "$dir/$tool" || ! -x "$dir/$tool" ]]; then
+        complete=0
+        break
+      fi
+    done
+    if [[ "$complete" -eq 1 ]]; then
       echo "$dir"
       return 0
     fi
   done
   return 1
+}
+
+# Run '<tool> --version' for every tool in PG_REQUIRED_TOOLS inside <bindir> and check
+# that each one runs and reports major version <major>.
+# On failure prints the first problem and returns 1.
+pg_tools_runnable() {
+  local bindir="$1" major="$2" tool found
+  for tool in "${PG_REQUIRED_TOOLS[@]}"; do
+    found="$(pg_major_version "$bindir/$tool")"
+    if [[ -z "$found" ]]; then
+      echo "$bindir/$tool does not run"
+      return 1
+    fi
+    if [[ "$found" != "$major" ]]; then
+      echo "$bindir/$tool is version $found, expected $major"
+      return 1
+    fi
+  done
+  return 0
 }
 
 # Print the major version of a PostgreSQL binary ("16"), or nothing.

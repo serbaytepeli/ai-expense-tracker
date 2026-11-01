@@ -35,10 +35,6 @@ if [[ "$(id -u)" -eq 0 ]]; then
 else
   STATE_DIR="${DEV_DB_STATE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/aiexpense-pg}"
 fi
-DATA_DIR="$STATE_DIR/data"
-SOCKET_DIR="$STATE_DIR/socket"
-LOG_FILE="$STATE_DIR/postgres.log"
-CREDENTIALS_FILE="$STATE_DIR/credentials.env"
 
 die() {
   echo "dev-db: $*" >&2
@@ -49,13 +45,88 @@ info() {
   echo "dev-db: $*" >&2
 }
 
-PG_BINDIR="$(find_pg_bindir)" || die "PostgreSQL server tools (initdb, pg_ctl, postgres) not found.
+# --- State directory safety -------------------------------------------------
+# The state directory is created, chmod-ed and (with 'destroy') deleted by this
+# script, so it must never point at the repository, a home directory, '/' or
+# another system location. Every command validates it first.
+
+MARKER_NAME=".aiexpense-dev-db"
+# The only entries this script ever creates inside the state directory.
+EXPECTED_ENTRIES=("$MARKER_NAME" data socket postgres.log credentials.env)
+
+# Print an absolute path with '.', '..' and symlinks resolved, even if it does not exist yet.
+resolve_path() {
+  local path="$1"
+  if realpath -m -- / >/dev/null 2>&1; then
+    realpath -m -- "$path"
+  elif [[ -d "$path" ]]; then
+    (cd -- "$path" && pwd -P)
+  else
+    # Fallback without GNU realpath: refuse '..' so the path cannot climb upwards.
+    [[ "/$path/" != *"/../"* ]] || return 1
+    printf '%s\n' "$path"
+  fi
+}
+
+validate_state_dir() {
+  local raw="$1" resolved repo_root home_dir protected depth
+  [[ -n "$raw" ]] || die "the state directory is empty."
+  [[ "$raw" == /* ]] || die "DEV_DB_STATE_DIR must be an absolute path (got '$raw')."
+  resolved="$(resolve_path "$raw")" || die "cannot resolve state directory '$raw'."
+  repo_root="$(resolve_path "$SCRIPT_DIR/..")"
+  home_dir="$(resolve_path "${HOME:-/}")"
+
+  for protected in / /bin /boot /dev /etc /home /lib /lib64 /media /mnt /opt /proc /root \
+    /run /sbin /srv /sys /tmp /usr /usr/local /var /var/lib /var/tmp \
+    "$home_dir" "$home_dir/.local" "$home_dir/.local/share"; do
+    [[ "$resolved" != "$protected" ]] || die "refusing to use '$resolved' as the state directory (protected location)."
+  done
+  if [[ "$repo_root" == "$resolved" || "$repo_root" == "$resolved"/* ]]; then
+    die "refusing to use '$resolved' as the state directory: it contains the repository."
+  fi
+  if [[ "$resolved" == "$repo_root"/* ]]; then
+    die "refusing to use '$resolved' as the state directory: it is inside the repository."
+  fi
+  if [[ "$home_dir" == "$resolved"/* ]]; then
+    die "refusing to use '$resolved' as the state directory: it contains a home directory."
+  fi
+  depth="$(tr -cd '/' <<< "$resolved" | wc -c)"
+  (( depth >= 2 )) || die "refusing to use '$resolved' as the state directory: too close to '/'."
+
+  printf '%s\n' "$resolved"
+}
+
+# Fail unless every entry in the state directory is one this script creates.
+require_only_expected_entries() {
+  local entry name expected ok
+  shopt -s nullglob dotglob
+  for entry in "$STATE_DIR"/*; do
+    name="$(basename -- "$entry")"
+    ok=0
+    for expected in "${EXPECTED_ENTRIES[@]}"; do
+      [[ "$name" == "$expected" ]] && ok=1 && break
+    done
+    if [[ "$ok" -eq 0 ]]; then
+      shopt -u nullglob dotglob
+      die "$STATE_DIR contains '$name', which this script did not create; refusing to continue."
+    fi
+  done
+  shopt -u nullglob dotglob
+}
+
+STATE_DIR="$(validate_state_dir "$STATE_DIR")" || exit 1
+DATA_DIR="$STATE_DIR/data"
+SOCKET_DIR="$STATE_DIR/socket"
+LOG_FILE="$STATE_DIR/postgres.log"
+CREDENTIALS_FILE="$STATE_DIR/credentials.env"
+MARKER_FILE="$STATE_DIR/$MARKER_NAME"
+
+PG_BINDIR="$(find_pg_bindir)" || die "PostgreSQL tools (${PG_REQUIRED_TOOLS[*]}) not found in one directory.
   This environment cannot run a local database. Database tests run in GitHub Actions instead.
   If the tools are installed elsewhere, set PG_BIN to their directory."
 
-server_major="$(pg_major_version "$PG_BINDIR/postgres")"
-[[ "$server_major" == "$REQUIRED_PG" ]] \
-  || die "found PostgreSQL $server_major in $PG_BINDIR, but version $REQUIRED_PG is required."
+problem="$(pg_tools_runnable "$PG_BINDIR" "$REQUIRED_PG")" \
+  || die "$problem. PostgreSQL $REQUIRED_PG is required."
 
 # PostgreSQL refuses to run as root, so as root every server command runs as 'postgres'.
 if [[ "$(id -u)" -eq 0 ]]; then
@@ -96,12 +167,20 @@ init_cluster() {
     existing="$(cat "$DATA_DIR/PG_VERSION")"
     [[ "$existing" == "$REQUIRED_PG" ]] \
       || die "$DATA_DIR holds a PostgreSQL $existing cluster; run '$0 destroy --yes' first."
+    require_only_expected_entries
+    # Clusters created before the marker existed get one, so 'destroy' can recognise them.
+    [[ -f "$MARKER_FILE" ]] || : > "$MARKER_FILE"
     return 0
   fi
 
+  if [[ -d "$STATE_DIR" ]]; then
+    # Reuse only a directory this script created (e.g. after an interrupted first run).
+    require_only_expected_entries
+  fi
   info "initialising a new cluster in $DATA_DIR"
   mkdir -p "$STATE_DIR" 2>/dev/null \
     || die "cannot create $STATE_DIR (no write access); set DEV_DB_STATE_DIR to a writable directory."
+  : > "$MARKER_FILE"
   chmod 755 "$STATE_DIR"
   mkdir -p "$DATA_DIR" "$SOCKET_DIR"
   if [[ "$(id -u)" -eq 0 ]]; then
@@ -201,8 +280,17 @@ cmd_stop() {
 
 cmd_destroy() {
   [[ "${1:-}" == "--yes" ]] || die "this deletes $STATE_DIR permanently; re-run with '--yes'."
+  if [[ ! -e "$STATE_DIR" ]]; then
+    info "nothing to delete: $STATE_DIR does not exist"
+    return 0
+  fi
+  [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] || die "$STATE_DIR is not a plain directory; refusing to delete it."
+  [[ -f "$MARKER_FILE" ]] \
+    || die "$STATE_DIR has no '$MARKER_NAME' marker, so it was not created by this script; refusing to delete it."
+  require_only_expected_entries
+
   cmd_stop
-  rm -rf "$STATE_DIR"
+  rm -rf -- "$STATE_DIR"
   info "deleted $STATE_DIR"
 }
 

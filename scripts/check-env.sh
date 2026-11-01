@@ -91,15 +91,14 @@ else
 fi
 
 if pg_bindir="$(find_pg_bindir)"; then
-  server_major="$(pg_major_version "$pg_bindir/postgres")"
-  if [[ "$server_major" == "$REQUIRED_PG" ]]; then
-    report OK "server tools" "$pg_bindir (postgres $server_major)"
+  if problem="$(pg_tools_runnable "$pg_bindir" "$REQUIRED_PG")"; then
+    report OK "server tools" "$pg_bindir (${PG_REQUIRED_TOOLS[*]}, version $REQUIRED_PG)"
   else
-    report WARN "server tools" "$pg_bindir has postgres $server_major; expected $REQUIRED_PG"
+    report WARN "server tools" "$problem"
     db_ready=0
   fi
 else
-  report WARN "server tools" "initdb/pg_ctl/postgres not found (set PG_BIN to their directory)"
+  report WARN "server tools" "${PG_REQUIRED_TOOLS[*]} not found together (set PG_BIN to their directory)"
   db_ready=0
 fi
 
