@@ -180,9 +180,35 @@ Diğer Gradle görevleri:
 | `./gradlew exportOpenApi` | OpenAPI belgesini `build/openapi.json`'a yazar (veritabanı gerekir) |
 | `./gradlew resolveAndLockAll --write-locks` | Bağımlılık değiştikten sonra `gradle.lockfile`'ı yeniler |
 
+**Docker imajı** (Docker olan bir makinede; CI bunu her backend değişikliğinde yapar):
+
+```bash
+cd backend && ./gradlew build
+```
+
+```bash
+cd backend && docker build --build-arg JAR_FILE=build/libs/ai-expense-tracker-backend-0.0.1-SNAPSHOT.jar -t aiexpense-backend:local .
+```
+
+İmaj yalnızca test edilmiş JAR'ı içerir (Eclipse Temurin 21 JRE, Ubuntu 24.04), root olmayan kullanıcıyla (`10001`) çalışır ve `8080` portunu açar. Çalıştırırken `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` ve `JWT_SECRET` verilmelidir.
+
 Veritabanı şeması yalnızca Flyway migration'larıyla (`backend/src/main/resources/db/migration/`) değişir. İlk migration'lar T1.1'de eklenecek.
 
 **Sorun giderme (Claude Code Cloud):** Ağ politikası bazı oturumlarda Maven Central'a hız sınırı (`429`) uygulayabilir veya `downloads.gradle.org`'u engelleyebilir. Bu ortama özel çözümler (ör. `~/.gradle/init.d/` altındaki bir ayna betiği) depoya eklenmez; GitHub Actions standart depoları kullanır.
+
+### CI (GitHub Actions)
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) her pull request'te ve `main`'e her push'ta çalışır. İşler yalnızca ilgili alan değiştiğinde çalışır; sonuç tek bir **`ci-gate`** kontrolünde toplanır.
+
+| İş | Ne zaman | Ne yapar |
+|---|---|---|
+| `changes` | Her zaman | Hangi alanların değiştiğini belirler (push ve elle çalıştırmada her şey) |
+| `workflow-lint` | `.github/**` değiştiyse | `actionlint` (+ shellcheck) |
+| `backend` | `backend/**`, `ci.yml`, `scripts/ci/**`, `.trivyignore` | JDK 21 + PostgreSQL 16 servis konteyneri → `./gradlew build` (veritabanı ve Flyway testleri dahil) → test özeti ve raporlar → test edilmiş JAR'dan Docker imajı → imaj duman testi → Trivy HIGH/CRITICAL taraması |
+| `mobile` | `mobile/**`, `.nvmrc`, `ci.yml`, `scripts/ci/**` | Node 22 → `npm ci` → lint → format → typecheck → test → `expo export` |
+| `ci-gate` | Her zaman | Yukarıdaki işlerden biri başarısız veya iptal olduysa başarısız; çalışan işler başarılıysa ve diğerleri atlandıysa başarılı |
+
+Dal korumasında zorunlu tutulacak kontrol yalnızca `ci-gate`'tir (T0.5 ile `security-gate` de eklenecek). Test sayıları ve sonuçlar her çalıştırmanın **Summary** sayfasında, ayrıntılı raporlar artifact olarak (`backend-test-reports`, `openapi`) bulunur.
 
 ### Mobil (React Native + Expo SDK 58)
 

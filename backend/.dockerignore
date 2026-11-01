@@ -1,0 +1,3 @@
+# The image only needs the tested JAR; keep everything else (sources, .gradle, reports) out.
+*
+!build/libs/*.jar
