@@ -1,6 +1,6 @@
 # AI Expense Tracker — API Sözleşmesi (v1)
 
-> Durum: **Onaylı kararlar işlendi — belge onayı bekleniyor (PR)**
+> Durum: **Revizyon 3 — ürün sahibi onayı bekleniyor (PR #1)**
 > Uygulama yazıldıktan sonra kesin kaynak, backend'in ürettiği OpenAPI şemasıdır (`/v3/api-docs`). Bu belge o şemanın tasarımıdır; API değişen her PR bu belgeyi de günceller.
 
 ## 1. Genel kurallar
@@ -34,12 +34,19 @@
 | HTTP | `code` | Ne zaman |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Alan doğrulaması başarısız (ileri tarih dahil) |
-| 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` / `TOKEN_EXPIRED` | Belirteç yok/geçersiz, yanlış giriş |
+| 401 | `UNAUTHORIZED` | Belirteç yok, imzası geçersiz veya bilinmeyen refresh token |
+| 401 | `INVALID_CREDENTIALS` | Yanlış e-posta/şifre |
+| 401 | `TOKEN_EXPIRED` | Access veya refresh token'ın süresi dolmuş |
+| 401 | `SESSION_REVOKED` | Oturum iptal edilmiş (çıkış, token yeniden kullanımı) |
+| 401 | `TOKEN_ALREADY_ROTATED` | Refresh token 30 sn içinde ikinci kez kullanıldı; oturum açık kalır |
+| 401 | `TOKEN_REUSED` | Refresh token 30 sn'den sonra yeniden kullanıldı; oturum iptal edildi |
 | 404 | `NOT_FOUND` | Kaynak yok **veya başka kullanıcıya ait** |
 | 409 | `EMAIL_TAKEN` / `CATEGORY_NAME_TAKEN` / `CATEGORY_PROTECTED` / `CATEGORY_ARCHIVED` | Çakışma |
+| 409 | `AI_GENERATION_IN_PROGRESS` | Aynı ay ve veri için üretim sürüyor (`Retry-After: 3`) |
 | 422 | `INSUFFICIENT_DATA` | AI yorumu için yeterli harcama yok |
-| 429 | `RATE_LIMITED` / `AI_DAILY_LIMIT` | Sınır aşıldı (`Retry-After` başlığıyla) |
-| 503 | `AI_UNAVAILABLE` | AI sağlayıcısı hata verdi, zaman aşımı veya yapılandırılmamış |
+| 429 | `RATE_LIMITED` | Giriş/kayıt hız sınırı (`Retry-After`) |
+| 429 | `AI_DAILY_LIMIT` | Günlük başarılı AI üretim sınırı doldu (`Retry-After`: kullanıcının yerel gece yarısına kalan saniye) |
+| 503 | `AI_UNAVAILABLE` | AI sağlayıcısı hata verdi, zaman aşımı, geçersiz yanıt veya yapılandırılmamış; kota düşülmez |
 
 ## 2. Auth (`auth` modülü)
 
@@ -58,14 +65,27 @@
 - Hazır kategoriler aynı transaction içinde oluşturulur.
 - Hatalar: 400, 409 `EMAIL_TAKEN`, 429.
 
+- E-posta kayıt ve girişte normalize edilir (database-design.md §3).
+
+Her başarılı kayıt/girişte yeni bir **oturum** oluşur. Access token (JWT, 15 dk) `sub` ve `sid` (oturum kimliği) içerir; korunan her istekte oturumun iptal edilmemiş olduğu kontrol edilir. Ayrıntılar: architecture.md §3.6.
+
 ### `POST /auth/login`
-`{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS`, 429.
+`{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS`, 429 `RATE_LIMITED`.
 
 ### `POST /auth/refresh`
-`{ "refreshToken" }` → 200 `{ accessToken, refreshToken, expiresIn }`. Eski refresh token iptal edilir (rotasyon). İptal edilmiş belirteç tekrar kullanılırsa 401 ve o kullanıcının tüm refresh token'ları iptal edilir (çalıntı belirteç koruması).
+`{ "refreshToken" }` → 200 `{ accessToken, refreshToken, expiresIn }`. Gönderilen refresh token kullanılmış olarak işaretlenir ve aynı oturumda yenisi üretilir (rotasyon).
+
+| Durum | Yanıt |
+|---|---|
+| Geçerli token | 200, yeni çift |
+| Süresi dolmuş | 401 `TOKEN_EXPIRED` |
+| Bilinmeyen | 401 `UNAUTHORIZED` |
+| Oturum iptal edilmiş | 401 `SESSION_REVOKED` |
+| Kullanılmış, rotasyondan ≤ 30 sn sonra (eşzamanlı istek / kaybolmuş yanıt) | 401 `TOKEN_ALREADY_ROTATED`; oturum açık kalır |
+| Kullanılmış, rotasyondan > 30 sn sonra | 401 `TOKEN_REUSED`; oturumun tamamı iptal edilir |
 
 ### `POST /auth/logout`
-`{ "refreshToken" }` → 204.
+Kimlik doğrulama gerekir. Gövde yok. Access token'daki `sid` oturumu iptal edilir → 204. Oturumun access ve refresh token'ları hemen geçersiz olur.
 
 ## 3. Kullanıcı (`user` modülü)
 
@@ -116,7 +136,7 @@ Parametreler: `month=YYYY-MM` **veya** `from` + `to` (ikisi dahil), `categoryId`
 → 201 + `Location` başlığı.
 
 Doğrulama:
-- `amount`: > 0, en fazla 2 ondalık, en fazla `999999999999.99`.
+- `amount`: string, desen `^[0-9]{1,12}(\.[0-9]{1,2})?$`, `> 0`, en fazla `999999999999.99`; yuvarlanmaz (database-design.md §2).
 - `date`: zorunlu; **kullanıcının saat dilimindeki bugünden ileri olamaz** (D-7) → aksi halde 400 `VALIDATION_ERROR`, `field: "date"`.
 - `categoryId`: kullanıcıya ait olmalı (aksi 404) ve aktif olmalı (arşivliyse 409 `CATEGORY_ARCHIVED`).
 - `description` ≤ 140, `note` ≤ 500, `paymentMethod` ∈ `CASH | CARD | OTHER | null`.
@@ -164,7 +184,7 @@ POST ile aynı gövde ve kurallar → 200. İstisna: harcamanın mevcut kategori
 
 ### Yorum nesnesi
 ```json
-{ "id": "...", "month": "2026-10",
+{ "id": "...", "generationId": "...", "month": "2026-10",
   "summary": "Ekim'de toplam 12.450,75 TL harcadınız; bu Eylül'e göre %13 fazla.",
   "observations": [ "Yeme-İçme harcamanız %35 arttı." ],
   "suggestions": [ "Dışarıda yemek için haftalık bir sınır belirlemeyi deneyebilirsiniz." ],
@@ -174,13 +194,26 @@ POST ile aynı gövde ve kurallar → 200. İstisna: harcamanın mevcut kategori
 ```
 
 ### `GET /insights/monthly?month=2026-10`
-En son kayıtlı yorum → 200; yoksa 404. `stale: true` → yorum oluşturulduktan sonra veri değişmiş.
-Yanıt başlığı: `X-AI-Remaining-Today: <0–5>`.
+En son kayıtlı yorum → 200; yoksa 404. `stale: true` → yorum oluşturulduktan sonra veri değişmiş. Mobil, üretim sürerken bu uç noktayı yoklar.
+Yanıt başlığı: `X-AI-Remaining-Today: <0–AI_DAILY_LIMIT>` (bugünkü başarılı + devam eden üretimler düşülmüş).
 
 ### `POST /insights/monthly?month=2026-10`
-Veri değişmediyse mevcut yorumu döner (200, kota düşmez); değiştiyse yeni yorum üretir (201).
-Hatalar: 422 `INSUFFICIENT_DATA` (< 3 harcama), 429 `AI_DAILY_LIMIT` (`Retry-After`: kullanıcının saat dilimine göre gece yarısına kalan saniye), 503 `AI_UNAVAILABLE`.
-Yanıt başlığı: `X-AI-Remaining-Today`.
+Gövde yok. İşlem akışı: architecture.md §3.5.
+
+| Durum | Yanıt |
+|---|---|
+| Aynı veri için yorum zaten var | **200** mevcut yorum; AI çağrılmaz, kota değişmez |
+| Yeni yorum üretildi | **201** yorum; 1 başarılı üretim kotadan düşer |
+| < 3 harcama | 422 `INSUFFICIENT_DATA` |
+| Aynı ay ve veri için üretim sürüyor | 409 `AI_GENERATION_IN_PROGRESS`, `Retry-After: 3` |
+| Bugünkü başarılı (+ devam eden) üretim sayısı ≥ `AI_DAILY_LIMIT` | 429 `AI_DAILY_LIMIT`, `Retry-After` = yerel gece yarısına kalan saniye |
+| Sağlayıcı hatası / zaman aşımı / geçersiz yanıt / anahtar yok | 503 `AI_UNAVAILABLE`; kota düşmez |
+
+Yanıt başlıkları: `X-AI-Generation-Id` (201 ve 503'te; problem gövdesinde de `generationId` alanı), `X-AI-Remaining-Today`.
+
+**İdempotency:** İstek doğal anahtarla (kullanıcı + ay + veri parmak izi) idempotenttir; ağ hatası sonrası tekrar gönderilen `POST` aynı veri için ikinci kez kota tüketmez. Ayrı `Idempotency-Key` başlığı yoktur.
+
+**Mobil yoklama:** `POST` ağ hatası/zaman aşımıyla biterse veya 409 dönerse, `GET` 3 sn aralıkla en fazla 60 sn çağrılır.
 
 ### AI sağlayıcısına giden yük — `InsightPayload` (iç sözleşme, D-8)
 
