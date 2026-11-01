@@ -241,7 +241,7 @@ DB testleri bağlantıyı `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`'
 |---|---|---|
 | `changes` | Her zaman | `dorny/paths-filter` ile hangi alanların değiştiğini belirler. `push`/`workflow_dispatch`'te tüm çıktılar `true` kabul edilir |
 | `workflow-lint` | `.github/**` değiştiyse | `actionlint` |
-| `backend` | `backend` **veya** `contract` filtresi (sözleşme kontrolü `openapi.json`'a ihtiyaç duyar) | JDK 21 + Gradle önbelleği → PostgreSQL 16 servis konteyneri → `./gradlew build` (tüm testler + JaCoCo) → test raporları ve `openapi.json` artifact olarak yüklenir → **test edilmiş JAR'dan Docker imajı derlenir (`load: true`, push yok) → aynı işte bu yerel imaj Trivy ile taranır** |
+| `backend` | `backend` **veya** `contract` filtresi (sözleşme kontrolü `openapi.json`'a ihtiyaç duyar) | JDK 21 + Gradle önbelleği → PostgreSQL 16 servis konteyneri → `./gradlew build` (tüm testler + JaCoCo) → test raporları ve `openapi.json` artifact olarak yüklenir → **test edilmiş JAR'dan Docker imajı derlenir (`docker build`, push yok) → imaj root olmayan kullanıcıyla `prod` profilinde başlatılıp health `{"status":"UP"}` kontrol edilir (duman testi) → aynı işte bu yerel imaj Trivy ile taranır** |
 | `mobile` | `mobile` filtresi | `.nvmrc`'deki Node + npm önbelleği → `npm ci` → lint → typecheck → Jest → `npx expo export` |
 | `contract` | `contract` filtresi; `needs: [backend]` | `backend` işinin ürettiği `openapi.json` indirilir → mobilde tipler yeniden üretilir → `git diff --exit-code` |
 | `ci-gate` | **Her zaman** (`if: always()`), `needs:` yukarıdakilerin hepsi | Herhangi bir iş `failure` veya `cancelled` ise başarısız; `success` veya `skipped` ise başarılı |
@@ -276,7 +276,7 @@ Docker imajı taraması imajın üretildiği `ci.yml` → `backend` işindedir (
 
 **Dependabot** (`dependabot.yml`): Gradle, npm, GitHub Actions ve Docker için haftalık güncelleme PR'ları. Dependabot PR'larında gizli değer gerekmez (CI hiç gizli değer kullanmaz).
 
-**Sabit sürüm:** Tüm üçüncü taraf Actions tam commit SHA'sıyla referanslanır (yorumda sürüm etiketiyle); Dependabot bunları günceller.
+**Sabit sürüm:** Tüm üçüncü taraf Actions tam commit SHA'sıyla referanslanır (yorumda sürüm etiketiyle); Dependabot bunları günceller. Trivy ve actionlint, üçüncü taraf bir action yerine resmi GitHub sürümlerinden ikili dosya olarak indirilir; sürüm ve SHA-256 değeri workflow'da sabittir ve indirme doğrulanmadan kullanılmaz.
 
 ### 6.4 Özel (private) depo kısıtları
 

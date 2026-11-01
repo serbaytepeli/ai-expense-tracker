@@ -1,0 +1,278 @@
+# Build and test pipeline (docs/architecture.md section 6.2, development-plan.md T0.4).
+#
+# The workflow starts for EVERY pull request: path filters are applied per job, not on the
+# workflow, so the required check "ci-gate" always reports a result (never stays "pending").
+# Branch protection should require only "ci-gate" (and "security-gate" from T0.5).
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Versions and checksums of tools downloaded as binaries (verified before use).
+  ACTIONLINT_VERSION: 1.7.12
+  ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+  TRIVY_VERSION: 0.76.1
+  TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # On push / manual runs everything is checked.
+      backend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.backend == 'true' }}
+      mobile: ${{ github.event_name != 'pull_request' || steps.filter.outputs.mobile == 'true' }}
+      workflows: ${{ github.event_name != 'pull_request' || steps.filter.outputs.workflows == 'true' }}
+    steps:
+      - name: Detect changed areas
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+              - 'scripts/ci/**'
+              - '.trivyignore'
+            mobile:
+              - 'mobile/**'
+              - '.nvmrc'
+              - '.github/workflows/ci.yml'
+              - 'scripts/ci/**'
+            workflows:
+              - '.github/**'
+
+  workflow-lint:
+    name: workflow-lint
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint ${{ env.ACTIONLINT_VERSION }}
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+
+      # actionlint also runs shellcheck on every `run:` script (shellcheck is on the runner).
+      - name: Lint workflows
+        run: |
+          "$RUNNER_TEMP/actionlint" -color
+
+  backend:
+    name: backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway database that exists only for this job; not a secret.
+          POSTGRES_USER: aiexpense
+          POSTGRES_PASSWORD: aiexpense-ci
+          POSTGRES_DB: aiexpense_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiexpense -d aiexpense_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_DB_URL: jdbc:postgresql://localhost:5432/aiexpense_test
+      TEST_DB_USERNAME: aiexpense
+      TEST_DB_PASSWORD: aiexpense-ci
+      IMAGE: aiexpense-backend:ci-${{ github.sha }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Gradle cache + Gradle Wrapper checksum validation.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Check PostgreSQL version
+        run: |
+          version=$(PGPASSWORD="$TEST_DB_PASSWORD" psql -h localhost -U "$TEST_DB_USERNAME" -d aiexpense_test -Atc 'SHOW server_version')
+          echo "PostgreSQL server: $version"
+          case "$version" in 16.*) ;; *) echo "::error::Expected PostgreSQL 16, got $version"; exit 1 ;; esac
+
+      # Compiles with -Werror and runs every test, including the Flyway and database
+      # integration tests (tag "db") against the PostgreSQL 16 service. Any failure fails the job.
+      - name: Build and test
+        run: ./gradlew build --console=plain
+
+      - name: Test summary
+        if: always()
+        run: python3 ../scripts/ci/junit-summary.py "Backend tests" build/test-results/test >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-test-reports
+          path: |
+            backend/build/reports/tests/test/
+            backend/build/test-results/test/
+            backend/build/reports/jacoco/test/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload OpenAPI document
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openapi
+          path: backend/build/openapi.json
+          if-no-files-found: error
+          retention-days: 14
+
+      # The image is built from the JAR produced and tested above; it is never pushed.
+      - name: Build Docker image from the tested JAR
+        run: |
+          jar=$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar')
+          if [ "$(printf '%s\n' "$jar" | grep -c .)" -ne 1 ]; then
+            echo "::error::Expected exactly one executable JAR in build/libs, found: $jar"
+            exit 1
+          fi
+          docker build --build-arg "JAR_FILE=$jar" --tag "$IMAGE" .
+
+      - name: Smoke test the image
+        run: |
+          docker run --rm --entrypoint id "$IMAGE" -u | grep -qvx 0 || { echo "::error::Image runs as root"; exit 1; }
+          docker run --detach --name backend-smoke --network host \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e DB_URL="$TEST_DB_URL" -e DB_USERNAME="$TEST_DB_USERNAME" -e DB_PASSWORD="$TEST_DB_PASSWORD" \
+            -e JWT_SECRET="$(openssl rand -base64 48)" \
+            "$IMAGE"
+          if ! body=$(curl -sS --fail --retry 30 --retry-connrefused --retry-delay 2 http://localhost:8080/actuator/health); then
+            docker logs backend-smoke | tail -50
+            exit 1
+          fi
+          echo "health: $body"
+          docker rm --force backend-smoke > /dev/null
+          [ "$body" = '{"status":"UP"}' ] || { echo "::error::Unexpected health response: $body"; exit 1; }
+
+      - name: Install Trivy ${{ env.TRIVY_VERSION }}
+        run: |
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" trivy
+
+      # Fails on HIGH/CRITICAL vulnerabilities that have a fix (docs/architecture.md section 6.3).
+      # Accepted findings, if ever needed, go to .trivyignore with a reason and an expiry date.
+      - name: Scan image with Trivy (HIGH, CRITICAL)
+        working-directory: .
+        run: |
+          "$RUNNER_TEMP/trivy" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            "$IMAGE"
+
+  mobile:
+    name: mobile
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPO_NO_TELEMETRY: '1'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node (.nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Export iOS and Android bundles
+        run: npm run export:check
+
+  # The only job branch protection needs to require. Succeeds when every job above either
+  # succeeded or was skipped because its area did not change; fails otherwise.
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [changes, workflow-lint, backend, mobile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          {
+            echo "### ci-gate"
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "$NEEDS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          bad=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")')
+          if [ -n "$bad" ]; then
+            echo "::error::Failed or cancelled jobs: $bad"
+            exit 1
+          fi
+          echo "All jobs succeeded or were skipped."
