@@ -44,3 +44,7 @@ mobile/expo-env.d.ts
 npm-debug.*
 yarn-error.*
 *.tsbuildinfo
+
+# --- Python (CI helper scripts) ---
+__pycache__/
+*.py[cod]

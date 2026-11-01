@@ -139,9 +139,13 @@ jobs:
       - name: Build and test
         run: ./gradlew build --console=plain
 
-      - name: Test summary
+      # Fails the job (and therefore ci-gate) when no test ran, or when the database tests did
+      # not run against PostgreSQL. The Gradle test task never comes from the build cache.
+      - name: Verify tests ran
         if: always()
-        run: python3 ../scripts/ci/junit-summary.py "Backend tests" build/test-results/test >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 -I -B ../scripts/ci/junit-summary.py "Backend tests" build/test-results/test \
+            --require-suite com.aiexpense.db.DatabaseInfrastructureTest >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test and coverage reports
         if: always()

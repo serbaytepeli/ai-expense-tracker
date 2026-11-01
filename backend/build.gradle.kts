@@ -62,6 +62,11 @@ tasks.test {
             logger.warn("WARNING: -PnoDb set: database tests (tag 'db') are NOT run. Report them as not run.")
         }
     }
+    // Tests must really run every time: never restore results from the build cache and never
+    // treat the task as up to date. Database tests depend on the environment (TEST_DB_*), which
+    // Gradle does not see as an input, so a cached "pass" could hide tests that never ran.
+    outputs.cacheIf("tests always execute") { false }
+    outputs.upToDateWhen { false }
     testLogging {
         events("passed", "skipped", "failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
