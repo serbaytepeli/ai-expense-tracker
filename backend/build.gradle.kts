@@ -104,3 +104,6 @@ tasks.register("resolveAndLockAll") {
         configurations.filter { it.isCanBeResolved }.forEach { it.resolve() }
     }
 }
+
+// TEMPORARY (T0.4 validation): no tests run; must make ci-gate fail. Reverted right after.
+tasks.test { enabled = false }
