@@ -45,7 +45,7 @@ M0 görevleri ([`docs/development-plan.md`](docs/development-plan.md) §3, bu s�
 |---|---|
 | T0.1 | Depo yapısı, `scripts/check-env.sh`, `scripts/dev-db.sh` (bu README) |
 | T0.2 | Backend iskeleti (`backend/`) — aşağıdaki "Backend" bölümü |
-| T0.3 | Mobil iskelet (`mobile/`) |
+| T0.3 | Mobil iskelet (`mobile/`) — aşağıdaki "Mobil" bölümü |
 | T0.4 | CI hattı: `.github/workflows/ci.yml`, `backend/Dockerfile`, isteğe bağlı `docker-compose.yml` |
 | T0.5 | Güvenlik hattı: `security.yml`, `codeql.yml`, `dependabot.yml`, `.gitleaks.toml`, `.trivyignore` |
 | T0.6 | Sözleşme kontrolü: `ci.yml` içindeki `contract` işi, `npm run api:generate` |
@@ -184,9 +184,52 @@ Veritabanı şeması yalnızca Flyway migration'larıyla (`backend/src/main/reso
 
 **Sorun giderme (Claude Code Cloud):** Ağ politikası bazı oturumlarda Maven Central'a hız sınırı (`429`) uygulayabilir veya `downloads.gradle.org`'u engelleyebilir. Bu ortama özel çözümler (ör. `~/.gradle/init.d/` altındaki bir ayna betiği) depoya eklenmez; GitHub Actions standart depoları kullanır.
 
-### Mobil
+### Mobil (React Native + Expo SDK 58)
 
-Mobil iskeletle (T0.3) eklenecek.
+Gereksinimler: Node 22 (`.nvmrc`). Uygulama iOS ve Android içindir; web hedefi yoktur.
+
+**1. Bağımlılıkları kur** (kilit dosyasındaki kesin sürümlerle):
+
+```bash
+cd mobile && npm ci
+```
+
+**2. Kontroller** (CI'da da bunlar çalışacak):
+
+| Komut | İşlem |
+|---|---|
+| `npm run lint` | ESLint (`eslint-config-expo`) + ekranda sabit metin yasağı + `any` yasağı; uyarı da hata sayılır |
+| `npm run format:check` | Prettier biçim kontrolü (`npm run format` düzeltir) |
+| `npm run typecheck` | TypeScript `strict` (`tsc --noEmit`); çeviri anahtarları da tip denetimlidir |
+| `npm test` | Jest (`jest-expo`) + React Native Testing Library |
+| `npm run export:check` | `expo export` ile iOS ve Android JavaScript paketlerini `dist/`'e üretir (yerel derleme değildir) |
+
+**3. Telefonda dene (isteğe bağlı):** Telefona App Store / Google Play'den **Expo Go** kurulur, ardından:
+
+```bash
+cd mobile && npx expo start
+```
+
+Terminaldeki QR kod Expo Go ile okutulur. Telefon ile geliştirme makinesi aynı ağda değilse `npx expo start --tunnel` gerekir. Claude Code Cloud'dan telefona bağlanma M0 kapanışında denenecek (development-plan.md, M0 kapanışı).
+
+**Yapı**
+
+```
+mobile/
+  app/                 Expo Router ekranları (yalnızca route ve layout dosyaları)
+    _layout.tsx        kök layout: i18n, açık/koyu tema
+    (tabs)/            4 sekme: index (Ana sayfa), expenses, report, settings
+  src/
+    components/        ortak bileşenler
+    features/          özellik mantığı (M1'den itibaren)
+    i18n/              i18next kurulumu ve locales/tr.json
+    theme/             renk paletleri ve useAppTheme
+  __tests__/           testler (app/ içine test konmaz)
+```
+
+**Kurallar:** Ekranlarda ve bileşenlerde kullanıcıya görünen her metin `src/i18n/locales/tr.json`'dan `t('…')` ile gelir; sabit metin lint hatasıdır. Paket eklerken SDK uyumlu sürüm için `npx expo install <paket>` kullanılır.
+
+**Sorun giderme (Claude Code Cloud):** Bu ortamda `api.expo.dev` engelli olabilir; `npx expo install` "Forbidden" verirse SDK'nın kendi uyumluluk tablosunu kullanan çevrimdışı mod çalışır: `EXPO_OFFLINE=1 npx expo install <paket>`.
 
 ## Katkı kuralları
 
