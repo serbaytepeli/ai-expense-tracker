@@ -14,4 +14,4 @@ export interface components {
   pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export type operations = Record<string, never>; // TEMPORARY hand edit (T0.6 validation)
