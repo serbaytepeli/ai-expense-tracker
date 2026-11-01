@@ -1,0 +1,69 @@
+# Dependabot version updates (docs/architecture.md section 6.3). Weekly, grouped to keep the
+# number of PRs small. Every Dependabot PR goes through ci-gate and security-gate like any other.
+# Dependabot security alerts are configured in the repository settings (free for private repos).
+
+version: 2
+
+updates:
+  # Backend: libs.versions.toml (Spring Boot BOM, springdoc, ArchUnit) and the Gradle wrapper.
+  # Note: dependency locking is on. If a PR changes versions, refresh the lockfiles
+  # (./gradlew resolveAndLockAll --write-locks) in that PR; CI fails until they match.
+  - package-ecosystem: gradle
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:41'
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps(backend)'
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Mobile: Expo SDK packages must stay on the versions of the current SDK, so major updates
+  # are ignored here; an Expo SDK upgrade is a planned task (npx expo install --fix).
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:41'
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps(mobile)'
+    groups:
+      mobile-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # GitHub Actions pinned by commit SHA (the "# vX.Y.Z" comments are updated too).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:41'
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps(ci)'
+    groups:
+      github-actions:
+        patterns: ['*']
+
+  # Backend Docker base image (digest-pinned FROM lines in backend/Dockerfile).
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:41'
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: 'deps(docker)'

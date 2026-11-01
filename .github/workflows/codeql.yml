@@ -1,0 +1,56 @@
+# CodeQL static analysis (docs/architecture.md section 6.4).
+#
+# Code scanning on a PRIVATE repository needs GitHub Advanced Security (Code Security).
+# Without it the analysis job is SKIPPED (not failed). It runs when the repository is public,
+# or when the repository variable CODEQL_ENABLED is set to "true" (after enabling GHAS).
+# This workflow is not part of security-gate and is not a required check.
+
+name: codeql
+
+on:
+  # Pull requests too, so the skip/run decision is visible on every PR.
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Mondays 04:23 UTC.
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    if: github.event.repository.private == false || vars.CODEQL_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # build-mode none: analyses source without building (no database or toolchain needed).
+        include:
+          - language: java-kotlin
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-and-quality
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

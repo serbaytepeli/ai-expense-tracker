@@ -233,7 +233,7 @@ DB testleri bağlantıyı `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`'
 |---|---|---|
 | `ci.yml` | **Her** `pull_request` (`main`'e), `main`'e push, `workflow_dispatch` | Değişiklik tespiti + backend, mobil, sözleşme, workflow lint işleri + **`ci-gate`** |
 | `security.yml` | **Her** `pull_request`, `main`'e push, haftalık zamanlama, `workflow_dispatch` | Gitleaks, Trivy (bağımlılık), npm audit, tarayıcı öz-testleri + **`security-gate`** |
-| `codeql.yml` | `main`'e push, haftalık | Yalnızca kullanılabilir olduğunda çalışır (§6.4) |
+| `codeql.yml` | `main`'e açılan PR, `main`'e push, haftalık | Yalnızca kullanılabilir olduğunda çalışır (§6.4); PR'da da tetiklenir ki atlanma/çalışma kararı her PR'da görünsün |
 
 **`ci.yml` işleri**
 
@@ -264,8 +264,8 @@ DB testleri bağlantıyı `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`'
 | `gitleaks` | Gitleaks **CLI ikilisi** (sabit sürüm + SHA-256 doğrulaması). PR'da yalnızca PR commit aralığı, zamanlamada tüm geçmiş. `gitleaks-action` kullanılmaz (organizasyon hesaplarında lisans ister) | Herhangi bir bulgu |
 | `trivy-deps` | `trivy fs` → `backend/gradle.lockfile`, `mobile/package-lock.json`; `--ignore-unfixed` | HIGH / CRITICAL |
 | `npm-audit` | `npm audit --omit=dev --audit-level=high` (üretim bağımlılıkları); geliştirme bağımlılıkları yalnızca raporlanır | high ve üstü (üretim) |
-| `scanner-self-test` | Tarayıcıların gerçekten çalıştığını kanıtlar (aşağıda) | Tarayıcı beklenen bulguyu bulamazsa |
-| `security-gate` | `if: always()` | Yukarıdakilerden biri başarısızsa |
+| `scanner-self-test` | Tarayıcıların gerçekten çalıştığını kanıtlar (aşağıda; `scripts/ci/scanner-self-test.sh`) | Tarayıcı beklenen bulguyu bulamazsa |
+| `security-gate` | `if: always()` | Yukarıdakilerden biri `success` değilse (güvenlik işleri yol filtresi olmadan her zaman çalışır, `skipped` da kabul edilmez) |
 
 Docker imajı taraması imajın üretildiği `ci.yml` → `backend` işindedir (imaj başka işe taşınmaz, kayıt defterine gönderilmez).
 

@@ -208,7 +208,23 @@ Veritabanı şeması yalnızca Flyway migration'larıyla (`backend/src/main/reso
 | `mobile` | `mobile/**`, `.nvmrc`, `ci.yml`, `scripts/ci/**` | Node 22 → `npm ci` → lint → format → typecheck → test → `expo export` |
 | `ci-gate` | Her zaman | Yukarıdaki işlerden biri başarısız veya iptal olduysa başarısız; çalışan işler başarılıysa ve diğerleri atlandıysa başarılı |
 
-Dal korumasında zorunlu tutulacak kontrol yalnızca `ci-gate`'tir (T0.5 ile `security-gate` de eklenecek). Test sayıları ve sonuçlar her çalıştırmanın **Summary** sayfasında, ayrıntılı raporlar artifact olarak (`backend-test-reports`, `openapi`) bulunur.
+Dal korumasında zorunlu tutulacak kontroller `ci-gate` ve `security-gate`'tir. Test sayıları ve sonuçlar her çalıştırmanın **Summary** sayfasında, ayrıntılı raporlar artifact olarak (`backend-test-reports`, `openapi`) bulunur.
+
+### Güvenlik (GitHub Actions)
+
+[`.github/workflows/security.yml`](.github/workflows/security.yml) her pull request'te, `main`'e her push'ta, haftalık (pazartesi) ve elle çalışır; yol filtresi yoktur. Sonuç **`security-gate`** kontrolünde toplanır.
+
+| İş | Ne yapar | Başarısız olur |
+|---|---|---|
+| `gitleaks` | Gizli anahtar taraması (PR'da PR'ın commit'leri, diğerlerinde tüm geçmiş), [`.gitleaks.toml`](.gitleaks.toml) | Herhangi bir bulguda |
+| `trivy-deps` | `backend/gradle.lockfile` ve `mobile/package-lock.json` açık taraması | Düzeltmesi olan HIGH/CRITICAL'da |
+| `npm-audit` | `npm audit --omit=dev --audit-level=high`; geliştirme bağımlılıkları yalnızca raporlanır | Üretim bağımlılığında high ve üstünde |
+| `scanner-self-test` | Çalışma anında üretilen sahte anahtarı ve açıklı kilit dosyasını tarayıcıların bulduğunu kanıtlar | Tarayıcı bulamazsa |
+| `security-gate` | Yukarıdakilerin sonucu | Biri başarılı değilse |
+
+Docker imajı taraması `ci.yml` içindedir. [`codeql.yml`](.github/workflows/codeql.yml) özel depoda GitHub Advanced Security olmadan **atlanır**; depo açık olursa veya `CODEQL_ENABLED=true` depo değişkeni verilirse çalışır. [`.github/dependabot.yml`](.github/dependabot.yml) Gradle, npm, GitHub Actions ve Docker için haftalık güncelleme PR'ları açar.
+
+**İstisna kuralı:** Bir güvenlik bulgusu yalnızca gerekçesi, onaylayanı ve (Trivy için) `exp:` bitiş tarihiyle [`.trivyignore`](.trivyignore) veya [`.gitleaks.toml`](.gitleaks.toml) içine yazılabilir. Gerçek bir gizli anahtar istisnaya alınmaz; geçmişten temizlenir ve değiştirilir.
 
 ### Mobil (React Native + Expo SDK 58)
 
