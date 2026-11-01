@@ -13,7 +13,7 @@
 # both FROM lines (not via an ARG) so Dependabot can detect and update it; keep both identical.
 
 # --- Stage 1: split the Spring Boot JAR into layers (better image layer caching) ---
-FROM eclipse-temurin:21-jre-noble@sha256:0eda5830ed7b669abc246a8dc520ea8a23cab06f9a8d4b6964109e2f2394e46f AS extract
+FROM eclipse-temurin:24-jre-noble@sha256:b416d02335e702b0403ff280de9475a3348e29382285969c9d4e17862ce632e7 AS extract
 WORKDIR /extract
 # Path of the tested executable JAR, relative to backend/. Required; there is no default
 # so that an untested or wrong JAR (for example the "-plain" JAR) is never picked silently.
@@ -22,7 +22,7 @@ COPY ${JAR_FILE} application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 # --- Stage 2: runtime ---
-FROM eclipse-temurin:21-jre-noble@sha256:0eda5830ed7b669abc246a8dc520ea8a23cab06f9a8d4b6964109e2f2394e46f
+FROM eclipse-temurin:24-jre-noble@sha256:b416d02335e702b0403ff280de9475a3348e29382285969c9d4e17862ce632e7
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 WORKDIR /app
