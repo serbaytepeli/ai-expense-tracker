@@ -1,0 +1,41 @@
+# Production. Restates the safe defaults from application.yml explicitly, so a later change
+# to the base file cannot silently turn these on in production.
+
+debug: false
+trace: false
+
+spring:
+  jpa:
+    show-sql: false
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      # Kubernetes liveness/readiness groups are not needed before deployment (D-11);
+      # disabled so the response stays exactly {"status":"UP"} (docs/api-contract.md section 8).
+      probes:
+        enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.aiexpense: INFO

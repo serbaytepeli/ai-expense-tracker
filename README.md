@@ -44,7 +44,7 @@ M0 görevleri ([`docs/development-plan.md`](docs/development-plan.md) §3, bu s�
 | Görev | Kapsam |
 |---|---|
 | T0.1 | Depo yapısı, `scripts/check-env.sh`, `scripts/dev-db.sh` (bu README) |
-| T0.2 | Backend iskeleti (`backend/`) |
+| T0.2 | Backend iskeleti (`backend/`) — aşağıdaki "Backend" bölümü |
 | T0.3 | Mobil iskelet (`mobile/`) |
 | T0.4 | CI hattı: `.github/workflows/ci.yml`, `backend/Dockerfile`, isteğe bağlı `docker-compose.yml` |
 | T0.5 | Güvenlik hattı: `security.yml`, `codeql.yml`, `dependabot.yml`, `.gitleaks.toml`, `.trivyignore` |
@@ -113,9 +113,80 @@ Tüm değişkenler [`.env.example`](.env.example) dosyasında açıklanmıştır
 
 `EXPO_PUBLIC_` önekli değerler uygulama paketine gömülür ve **gizli değildir**; bu değişkene asla anahtar veya şifre yazılmaz. M0 sonundaki Expo Go denemesi backend'e bağlanmayı gerektirmez (yalnızca boş ekranlar).
 
-### Backend ve mobil komutları
+### Backend (Java 21 + Spring Boot 4.1)
 
-Backend (T0.2) ve mobil (T0.3) iskeletleriyle eklenecek; M0 kapanışında doğrulanmış komutlarla güncellenecek.
+Gereksinimler: Java 21 ve bir PostgreSQL 16 veritabanı. Gradle kurmak gerekmez; depodaki Gradle Wrapper (`backend/gradlew`, Gradle 9.8.2) kullanılır.
+
+**1. Ortam değişkenlerini ver.** Uygulama veritabanı ve JWT ayarları olmadan **açılmaz**; eksik değişkenleri adıyla söyleyerek durur. Kodda veya depoda varsayılan şifre yoktur.
+
+```bash
+eval "$(scripts/dev-db.sh env)"
+```
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
+```
+
+```bash
+export SPRING_PROFILES_ACTIVE=dev
+```
+
+`dev-db.sh env` komutu `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` ve `TEST_DB_*` değişkenlerini verir. Diğer değişkenler (`AI_*`, `ANTHROPIC_API_KEY`) isteğe bağlıdır; açıklamaları [`.env.example`](.env.example) dosyasındadır. Geçersiz değerler (ör. `AI_DAILY_LIMIT=0`, 32 bayttan kısa `JWT_SECRET`) uygulamanın açılmasını engeller.
+
+**2. Başlat.**
+
+```bash
+cd backend && ./gradlew bootRun
+```
+
+Uygulama `http://127.0.0.1:8080` üzerinde açılır. Loglar JSON biçimindedir.
+
+**3. Health endpoint'ini kontrol et.**
+
+```bash
+curl -i http://127.0.0.1:8080/actuator/health
+```
+
+Beklenen: `HTTP 200` ve `prod`/varsayılan profilde tam olarak `{"status":"UP"}`. Veritabanına ulaşılamazsa `HTTP 503` ve `{"status":"DOWN"}`. Her yanıtta `X-Request-Id` başlığı bulunur.
+
+**Profiller**
+
+| Profil | Ne zaman | Swagger (`/v3/api-docs`, `/swagger-ui/index.html`) | Health ayrıntıları |
+|---|---|---|---|
+| (yok) | Varsayılan; güvenli ayarlar | Kapalı | Yok — yalnızca `{"status":"UP"}` |
+| `dev` | Yerel geliştirme | Açık | Açık (veritabanı, disk …) |
+| `prod` | Üretim | Kapalı | Yok |
+
+Tüm profillerde Actuator'da yalnızca `health` açıktır; hata yanıtlarında stack trace veya iç hata mesajı bulunmaz.
+
+**Testler**
+
+```bash
+cd backend && ./gradlew test
+```
+
+Veritabanı testleri `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD` değişkenlerini kullanır (`eval "$(scripts/dev-db.sh env)"`). Bu değişkenler yoksa testler **başarısız olur**, atlanmaz. Veritabanı olmayan bir ortamda yalnızca veritabanı gerektirmeyen testleri çalıştırmak için `-PnoDb` verilir; bu durumda veritabanı testleri "çalıştırılmadı" olarak raporlanmalıdır:
+
+```bash
+cd backend && ./gradlew test -PnoDb
+```
+
+Diğer Gradle görevleri:
+
+| Komut | İşlem |
+|---|---|
+| `./gradlew build` | Derleme + tüm testler + JaCoCo raporu (`build/reports/jacoco/`) |
+| `./gradlew bootJar` | Çalıştırılabilir JAR (`build/libs/`) |
+| `./gradlew exportOpenApi` | OpenAPI belgesini `build/openapi.json`'a yazar (veritabanı gerekir) |
+| `./gradlew resolveAndLockAll --write-locks` | Bağımlılık değiştikten sonra `gradle.lockfile`'ı yeniler |
+
+Veritabanı şeması yalnızca Flyway migration'larıyla (`backend/src/main/resources/db/migration/`) değişir. İlk migration'lar T1.1'de eklenecek.
+
+**Sorun giderme (Claude Code Cloud):** Ağ politikası bazı oturumlarda Maven Central'a hız sınırı (`429`) uygulayabilir veya `downloads.gradle.org`'u engelleyebilir. Bu ortama özel çözümler (ör. `~/.gradle/init.d/` altındaki bir ayna betiği) depoya eklenmez; GitHub Actions standart depoları kullanır.
+
+### Mobil
+
+Mobil iskeletle (T0.3) eklenecek.
 
 ## Katkı kuralları
 
