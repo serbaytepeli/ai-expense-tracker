@@ -16,7 +16,7 @@
   ```json
   { "items": [ ... ], "page": 0, "size": 20, "totalItems": 134, "totalPages": 7 }
   ```
-- Her yanıtta `X-Request-Id` başlığı bulunur.
+- Her yanıtta `X-Request-Id` başlığı bulunur. İstemci `[A-Za-z0-9._-]{1,64}` biçiminde bir `X-Request-Id` gönderirse aynısı kullanılır; göndermezse veya biçim geçersizse sunucu bir UUID üretir. Aynı değer hata gövdesindeki `requestId` alanında ve sunucu loglarında bulunur.
 
 ### Hata biçimi (RFC 9457)
 ```json
@@ -47,6 +47,9 @@
 | 429 | `RATE_LIMITED` | Giriş/kayıt hız sınırı (`Retry-After`) |
 | 429 | `AI_DAILY_LIMIT` | Günlük başarılı AI üretim sınırı doldu (`Retry-After`: kullanıcının yerel gece yarısına kalan saniye) |
 | 503 | `AI_UNAVAILABLE` | AI sağlayıcısı hata verdi, zaman aşımı, geçersiz yanıt veya yapılandırılmamış; kota düşülmez |
+| 500 | `INTERNAL_ERROR` | Beklenmeyen sunucu hatası. `detail` her zaman genel bir metindir; istisna mesajı, sınıf adı veya stack trace yanıta konmaz (sunucu logunda `requestId` ile bulunur) |
+
+Yukarıda adı geçmeyen diğer HTTP hatalarında `code`, HTTP durumunun adıdır (ör. 405 → `METHOD_NOT_ALLOWED`, 415 → `UNSUPPORTED_MEDIA_TYPE`) ve `type` = `https://aiexpense.app/problems/<code küçük harf, _ yerine ->`. Bilinmeyen yol 404 `NOT_FOUND` döner.
 
 ## 2. Auth (`auth` modülü)
 
@@ -256,4 +259,6 @@ AI'dan beklenen yanıt (yapılandırılmış JSON, sunucuda doğrulanır):
 
 ## 8. Sağlık
 
-`GET /actuator/health` → `{ "status": "UP" }` (kimlik doğrulama gerektirmez; ayrıntılar yalnızca `dev` profilinde).
+`GET /actuator/health` → `{ "status": "UP" }` (kimlik doğrulama gerektirmez). Varsayılan ve `prod` profillerinde yanıt tam olarak budur: bileşen, ayrıntı veya probe grupları gösterilmez. Ayrıntılar (veritabanı, disk vb.) yalnızca `dev` profilinde görünür. Veritabanına ulaşılamazsa `503` ve `{ "status": "DOWN" }`.
+
+Actuator'da `health` dışında hiçbir uç nokta HTTP üzerinden açık değildir (`env`, `beans`, `configprops`, `loggers`, `heapdump` vb. → 404).

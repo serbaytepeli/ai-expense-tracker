@@ -83,18 +83,19 @@ ai-expense-tracker/
 
 | Konu | Seçim |
 |---|---|
-| Dil / çatı | Java 21, Spring Boot (T0.2'de güncel kararlı sürüm seçilir ve sabitlenir) |
+| Dil / çatı | Java 21, Spring Boot 4.1 (T0.2'de 4.1.2 seçildi; sürümler `gradle/libs.versions.toml`'da, kesin sürümler `gradle.lockfile`'da) |
 | Build | Gradle Kotlin DSL + wrapper + version catalog + dependency locking (D-13) |
 | Veri erişimi | Spring Data JPA (CRUD) + rapor ve kota için `JdbcClient` ile SQL |
 | Migration | Flyway |
 | Doğrulama | Jakarta Bean Validation (biçim) + servis katmanı (zamana ve kullanıcıya bağlı kurallar) |
 | Güvenlik | Spring Security, stateless JWT (HS256), BCrypt cost 12 |
 | Hata formatı | RFC 9457 `application/problem+json` |
-| API dokümantasyonu | springdoc-openapi; Swagger UI yalnızca `dev` profilinde |
+| API dokümantasyonu | springdoc-openapi; `/v3/api-docs` ve Swagger UI yalnızca `dev` profilinde |
+| Profiller | Varsayılan ayarlar üretim kadar güvenli (Swagger kapalı, health ayrıntısız, stack trace yok, yalnızca `health` açık). `dev` yalnızca geliştirme kolaylıklarını açar; `prod` güvenli ayarları açıkça tekrar eder |
 | AI | `InsightProvider` arayüzü; `AnthropicInsightProvider` (gerçek), `FakeInsightProvider` (test) |
 | Zamanlanmış işler | Spring `@Scheduled` (database-design.md §7) |
 | Test | JUnit 5, Mockito, Spring Boot Test + MockMvc, ArchUnit, JaCoCo, WireMock (sahte Anthropic HTTP sunucusu) |
-| Loglama | Logback JSON; MDC'de `requestId` ve varsa `generationId` |
+| Loglama | Spring Boot yapılandırılmış loglama (Logback, `logstash` JSON biçimi); MDC'de `requestId` ve varsa `generationId`; tüm log değerlerinde şifre/token/API anahtarı maskeleme (güvenlik ağı) |
 
 ### 3.4 Yapılandırma doğrulaması
 Yapılandırma `@ConfigurationProperties` + `@Validated` sınıflarıyla okunur; geçersiz değer **uygulamanın açılmasını engeller** (hızlı hata).

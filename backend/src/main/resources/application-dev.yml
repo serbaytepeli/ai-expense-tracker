@@ -1,0 +1,17 @@
+# Local development only. Never activate in production.
+
+management:
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    com.aiexpense: DEBUG
