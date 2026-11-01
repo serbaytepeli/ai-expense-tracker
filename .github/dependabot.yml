@@ -67,3 +67,10 @@ updates:
     open-pull-requests-limit: 2
     commit-message:
       prefix: 'deps(docker)'
+    ignore:
+      # The project stays on Java 21 LTS (backend toolchain and CI use JDK 21). The tag's leading
+      # number is the Java major version (21-jre-noble), so major updates (22, 24, 25 ...) are
+      # ignored. New digests of the 21 image (security and patch releases) still arrive.
+      # Moving to a newer Java LTS is a planned decision, not a Dependabot update.
+      - dependency-name: eclipse-temurin
+        update-types: ['version-update:semver-major']
