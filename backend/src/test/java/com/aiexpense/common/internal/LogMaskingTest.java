@@ -10,7 +10,7 @@ class LogMaskingTest {
     // Values below are made up for the test; none of them is a real credential.
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', textBlock = """
-            password=hunter2-fake                      | password=***
+            password=hunter2-fake                      | password=NOT-MASKED-deliberately-broken
             login failed, Password: hunter2-fake       | login failed, Password: ***
             {"password":"hunter2-fake","email":"a@b.c"} | {"password":"***","email":"a@b.c"}
             refreshToken=abc.def-fake                  | refreshToken=***
