@@ -1,0 +1,26 @@
+{
+  "tabs": {
+    "home": "Ana sayfa",
+    "expenses": "Harcamalar",
+    "report": "Rapor",
+    "settings": "Ayarlar"
+  },
+  "screens": {
+    "home": {
+      "title": "Ana sayfa",
+      "placeholder": "Bu ayın harcama özeti burada görünecek."
+    },
+    "expenses": {
+      "title": "Harcamalar",
+      "placeholder": "Harcama listesi burada görünecek."
+    },
+    "report": {
+      "title": "Rapor",
+      "placeholder": "Aylık rapor ve grafikler burada görünecek."
+    },
+    "settings": {
+      "title": "Ayarlar",
+      "placeholder": "Hesap ve uygulama ayarları burada görünecek."
+    }
+  }
+}

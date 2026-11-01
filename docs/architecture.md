@@ -182,7 +182,7 @@ Yapılandırma `@ConfigurationProperties` + `@Validated` sınıflarıyla okunur;
 
 | Konu | Seçim |
 |---|---|
-| Çatı | Expo (managed workflow; T0.3'te güncel kararlı SDK seçilir), TypeScript `strict` |
+| Çatı | Expo SDK 58 (managed workflow; T0.3'te seçildi), React Native 0.88, React 19.3, TypeScript 6 `strict`. Hedef platformlar yalnızca iOS ve Android (`app.config.ts`). React Navigation, SDK 58'de `expo-router` içindedir; tema ve sekmeler `expo-router`'dan alınır |
 | Navigasyon | Expo Router |
 | Sunucu durumu | TanStack Query |
 | İstemci durumu | Zustand |
