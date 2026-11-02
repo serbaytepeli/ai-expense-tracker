@@ -1,5 +1,6 @@
 package com.aiexpense.auth.internal;
 
+import com.aiexpense.category.CategoryApi;
 import com.aiexpense.common.ApiException;
 import com.aiexpense.user.EmailAddresses;
 import com.aiexpense.user.UserApi;
@@ -49,6 +50,7 @@ class AuthService {
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final UserApi users;
+    private final CategoryApi categories;
     private final SessionStore sessions;
     private final AccessTokens accessTokens;
     private final PasswordEncoder passwordEncoder;
@@ -58,9 +60,10 @@ class AuthService {
     /** Compared against when the e-mail is unknown, so both cases take the same BCrypt time. */
     private final String dummyHash;
 
-    AuthService(UserApi users, SessionStore sessions, AccessTokens accessTokens, PasswordEncoder passwordEncoder,
+    AuthService(UserApi users, CategoryApi categories, SessionStore sessions, AccessTokens accessTokens, PasswordEncoder passwordEncoder,
             AttemptLimiter limiter, AuthProperties properties, Clock clock) {
         this.users = users;
+        this.categories = categories;
         this.sessions = sessions;
         this.accessTokens = accessTokens;
         this.passwordEncoder = passwordEncoder;
@@ -86,6 +89,8 @@ class AuthService {
         }
 
         UserView user = users.create(normalizedEmail, passwordEncoder.encode(password), name, timeZone);
+        // Same transaction: if the default categories cannot be created, the user is not created either.
+        categories.createDefaultCategories(user.id());
         log.info("User registered: userId={}", user.id());
         return startSession(user);
     }

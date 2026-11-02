@@ -41,7 +41,7 @@
 | 401 | `TOKEN_ALREADY_ROTATED` | Refresh token 30 sn içinde ikinci kez kullanıldı; oturum açık kalır |
 | 401 | `TOKEN_REUSED` | Refresh token 30 sn'den sonra yeniden kullanıldı; oturum iptal edildi |
 | 404 | `NOT_FOUND` | Kaynak yok **veya başka kullanıcıya ait** |
-| 409 | `EMAIL_TAKEN` / `CATEGORY_NAME_TAKEN` / `CATEGORY_PROTECTED` / `CATEGORY_ARCHIVED` | Çakışma |
+| 409 | `EMAIL_TAKEN` / `CATEGORY_NAME_TAKEN` / `CATEGORY_PROTECTED` / `CATEGORY_ARCHIVED` / `CATEGORY_SORT_ORDER_LIMIT` | Çakışma |
 | 409 | `AI_GENERATION_IN_PROGRESS` | Aynı ay ve veri için üretim sürüyor (`Retry-After: 3`) |
 | 422 | `INSUFFICIENT_DATA` | AI yorumu için yeterli harcama yok |
 | 429 | `RATE_LIMITED` | Giriş/kayıt hız sınırı (`Retry-After`) |
@@ -65,7 +65,7 @@ Yukarıda adı geçmeyen diğer HTTP hatalarında `code`, HTTP durumunun adıdı
 ```
 - `timeZone` isteğe bağlı (mobil cihazın saat dilimini gönderir); geçersiz veya boşsa `Europe/Istanbul`.
 - `currency` her zaman `TRY` olarak oluşturulur (D-3).
-- Hazır kategoriler aynı transaction içinde oluşturulur (**T1.3** ile; T1.2'de kayıt yalnızca kullanıcıyı ve oturumu oluşturur).
+- Hazır kategoriler (§4) kullanıcıyla aynı transaction içinde oluşturulur; oluşturulamazsa kayıt tümüyle geri alınır.
 - Doğrulama (400 `VALIDATION_ERROR`, `errors[].field`): `email` en fazla 254 karakter ve `ad@alan` biçimi; `password` 8–72 karakter **ve** UTF-8'de en fazla 72 bayt (BCrypt ilk 72 baytı kullanır; daha uzun şifre kırpılmaz, reddedilir); `displayName` kırpıldıktan sonra 1–60 karakter.
 - Hatalar: 400, 409 `EMAIL_TAKEN` (eşzamanlı iki kayıtta da yalnızca biri başarılı olur), 429 `RATE_LIMITED`.
 
@@ -107,19 +107,46 @@ Kimlik doğrulama gerekir. Gövde yok. Access token'daki `sid` oturumu iptal edi
 
 ### Kategori nesnesi
 ```json
-{ "id": "...", "name": "Market", "icon": "cart", "color": "#4CAF50",
+{ "id": "...", "name": "Market", "icon": "cart-outline", "color": "#2E7D32",
   "systemKey": "GROCERIES", "sortOrder": 1, "archived": false }
 ```
+- Tüm alanlar yanıtta her zaman bulunur. `systemKey` yalnızca hazır kategorilerde dolu; kullanıcının oluşturduğu kategorilerde `null`.
 
 | Metot | Yol | Açıklama |
 |---|---|---|
-| GET | `/categories?includeArchived=false` | Kategori listesi (`sortOrder`, sonra ad sırasıyla) |
-| POST | `/categories` | `{ "name", "icon", "color" }` → 201. Hatalar: 400, 409 `CATEGORY_NAME_TAKEN` |
-| PATCH | `/categories/{id}` | `name`, `icon`, `color`, `sortOrder` → 200 |
-| POST | `/categories/{id}/archive` | → 200. `OTHER` için 409 `CATEGORY_PROTECTED` |
-| POST | `/categories/{id}/unarchive` | → 200. Aynı adda aktif kategori varsa 409 `CATEGORY_NAME_TAKEN` |
+| GET | `/categories?includeArchived=false` | Kategori listesi (`sortOrder`, sonra ad sırasıyla). Varsayılan yalnızca aktif kategoriler; `includeArchived=true` arşivlileri de verir |
+| POST | `/categories` | `{ "name", "icon", "color" }` → 201. Hatalar: 400, 409 `CATEGORY_NAME_TAKEN`, 409 `CATEGORY_SORT_ORDER_LIMIT` |
+| PATCH | `/categories/{id}` | `name`, `icon`, `color`, `sortOrder` (hepsi isteğe bağlı; gönderilmeyen alan değişmez) → 200. Arşivli kategori de düzenlenebilir. Hatalar: 400, 404, 409 `CATEGORY_NAME_TAKEN` |
+| POST | `/categories/{id}/archive` | → 200 (zaten arşivliyse değişiklik yapmaz). `OTHER` için 409 `CATEGORY_PROTECTED` |
+| POST | `/categories/{id}/unarchive` | → 200 (zaten aktifse değişiklik yapmaz). Aynı adda aktif kategori varsa 409 `CATEGORY_NAME_TAKEN` |
 
-Kategori silme uç noktası yoktur.
+Kategori silme uç noktası yoktur. Tüm uç noktalar kimlik doğrulaması ister; sahip her zaman JWT'deki kullanıcıdır. Başka kullanıcıya ait, bilinmeyen veya biçimi geçersiz `id` → 404 `NOT_FOUND`.
+
+**Doğrulama** (400 `VALIDATION_ERROR`, `errors[].field`):
+- `name`: baştaki/sondaki boşluk karakterleri kırpılarak saklanır; kırpıldıktan sonra 1–30 karakter. Kırpılanlar: tüm Unicode `White_Space` karakterleri (normal boşluk, sekme, satır sonu, bölünmez boşluklar U+00A0/U+2007/U+202F, U+3000 vb.) ile görünmez U+200B ve U+FEFF. Aradaki boşluklara dokunulmaz.
+- `icon`: 1–40 karakter; yalnızca küçük harf `a-z`, rakam ve `-` (Ionicons adı biçimi; backend ikon listesi tutmaz).
+- `color`: `#RRGGBB`; büyük harfe çevrilerek saklanır.
+- `sortOrder`: 0–32767.
+
+**Ad benzersizliği:** Aynı kullanıcının **aktif** kategorileri arasında, kırpılmış ad üzerinde, Türkçe harfler dahil büyük/küçük harf duyarsız: `I`, `İ`, `ı`, `i` aynı harf sayılır ("ULAŞIM" = "Ulaşım", "GİYİM" = "Giyim"). Karşılaştırmayı veritabanı yapar (`uk_categories_user_active_name`, database-design.md); uygulama ayrıca karşılaştırma yapmaz. Arşivli kategorinin adı yeni kategoride kullanılabilir; bu durumda arşivli kategori arşivden çıkarılamaz (409 `CATEGORY_NAME_TAKEN`).
+
+**Sıralama:** Yeni kategori, kullanıcının (arşivliler dahil) en büyük `sortOrder` değerinin bir fazlasını alır; aynı kullanıcının eşzamanlı oluşturma istekleri sırayla işlenir, böylece her yeni kategori ayrı bir değer alır. Bu değer 32767'yi aşacaksa kategori oluşturulmaz: 409 `CATEGORY_SORT_ORDER_LIMIT` (çözüm: mevcut bir kategorinin `sortOrder` değerini PATCH ile düşürmek).
+
+**Hazır kategoriler** (kayıtta oluşturulur; yeniden adlandırılabilir ve arşivlenebilir, `OTHER` arşivlenemez):
+
+| sortOrder | name | systemKey | icon | color |
+|---|---|---|---|---|
+| 1 | Market | `GROCERIES` | `cart-outline` | `#2E7D32` |
+| 2 | Yeme-İçme | `FOOD_DRINK` | `restaurant-outline` | `#EF6C00` |
+| 3 | Ulaşım | `TRANSPORT` | `bus-outline` | `#1565C0` |
+| 4 | Faturalar | `BILLS` | `receipt-outline` | `#6A1B9A` |
+| 5 | Kira/Konut | `HOUSING` | `home-outline` | `#4E342E` |
+| 6 | Sağlık | `HEALTH` | `medkit-outline` | `#C62828` |
+| 7 | Eğlence | `ENTERTAINMENT` | `film-outline` | `#AD1457` |
+| 8 | Giyim | `CLOTHING` | `shirt-outline` | `#00838F` |
+| 9 | Eğitim | `EDUCATION` | `school-outline` | `#283593` |
+| 10 | Abonelikler | `SUBSCRIPTIONS` | `repeat-outline` | `#F9A825` |
+| 11 | Diğer | `OTHER` | `ellipsis-horizontal-outline` | `#616161` |
 
 ## 5. Harcamalar (`expense` modülü)
 

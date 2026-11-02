@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Constraints of migrations V1-V3 (docs/database-design.md sections 6 and 10) on a real
+ * Constraints of migrations V1-V4 (docs/database-design.md sections 6 and 10) on a real
  * PostgreSQL 16 database.
  *
  * <p>Isolation: every test runs in one transaction that is rolled back at the end, so no data is
@@ -143,6 +143,25 @@ class IdentityAndCategorySchemaTest extends DatabaseIntegrationTest {
         assertRejected(() -> insertCategory(user, "MARKET", "#4CAF50", null), "uk_categories_user_active_name");
         assertRejected(() -> insertCategory(user, "market", "#4CAF50", null), "uk_categories_user_active_name");
         assertThat(countCategories(user)).isOne();
+    }
+
+    @Test
+    void activeCategoryNamesAreUniqueIgnoringTurkishCase() {
+        UUID user = insertUser("turkish@example.com");
+        insertCategory(user, "Ulaşım", "#4CAF50", null);
+        insertCategory(user, "Giyim", "#4CAF50", null);
+        insertCategory(user, "Çiğ Köfte", "#4CAF50", null);
+        insertCategory(user, "Şöför Ücreti", "#4CAF50", null);
+
+        // Enforced by the index alone (V4), without any application code.
+        for (String duplicate : new String[] {"ULAŞIM", "ulaşim", "UlaŞIm", "GİYİM", "GIYIM", "giyım", "gıyım",
+                "ÇİĞ KÖFTE", "çığ köfte", "ŞÖFÖR ÜCRETİ", "şöför ücreti"}) {
+            assertRejected(() -> insertCategory(user, duplicate, "#4CAF50", null), "uk_categories_user_active_name");
+        }
+        assertThat(countCategories(user)).isEqualTo(4);
+        // Different words stay different.
+        assertThat(insertCategory(user, "Ulaşım Kartı", "#4CAF50", null)).isNotNull();
+        assertThat(insertCategory(user, "Giysi", "#4CAF50", null)).isNotNull();
     }
 
     @Test

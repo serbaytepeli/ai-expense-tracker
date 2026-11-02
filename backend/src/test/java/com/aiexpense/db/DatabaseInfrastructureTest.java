@@ -41,13 +41,14 @@ class DatabaseInfrastructureTest extends DatabaseIntegrationTest {
     }
 
     @Test
-    void migrationsV1ToV3AreApplied() {
+    void migrationsV1ToV4AreApplied() {
         assertThat(flyway.info().applied())
                 .extracting(info -> info.getVersion().getVersion(), MigrationInfo::getDescription)
                 .containsExactly(
                         tuple("1", "create users"),
                         tuple("2", "create auth sessions and refresh tokens"),
-                        tuple("3", "create categories"));
+                        tuple("3", "create categories"),
+                        tuple("4", "category name turkish case folding"));
     }
 
     @Test

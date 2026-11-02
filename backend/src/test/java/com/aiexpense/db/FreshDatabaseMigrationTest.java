@@ -39,7 +39,7 @@ class FreshDatabaseMigrationTest extends DatabaseIntegrationTest {
             assertThat(result.success).isTrue();
             assertThat(result.initialSchemaVersion).isNull();
             assertThat(result.migrations).extracting(migration -> migration.version)
-                    .containsExactly("1", "2", "3");
+                    .containsExactly("1", "2", "3", "4");
             flyway.validate();
 
             List<String> tables = jdbc.sql("""
