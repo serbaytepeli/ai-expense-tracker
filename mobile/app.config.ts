@@ -24,7 +24,13 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
   },
-  plugins: ['expo-router', 'expo-status-bar', 'expo-localization'],
+  plugins: [
+    'expo-router',
+    'expo-status-bar',
+    'expo-localization',
+    'expo-secure-store',
+    '@react-native-community/datetimepicker',
+  ],
 };
 
 export default config;

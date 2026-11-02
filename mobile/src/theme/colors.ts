@@ -10,6 +10,11 @@ export interface AppColors {
   primary: string;
   border: string;
   tabInactive: string;
+  /** Text and icons on a primary-colored background. */
+  onPrimary: string;
+  danger: string;
+  dangerSurface: string;
+  success: string;
 }
 
 // Text/background pairs meet WCAG AA contrast (4.5:1) in both schemes.
@@ -22,6 +27,10 @@ export const palettes: Record<ColorScheme, AppColors> = {
     primary: '#0F766E',
     border: '#E5E7EB',
     tabInactive: '#6B7280',
+    onPrimary: '#FFFFFF',
+    danger: '#B91C1C',
+    dangerSurface: '#FEE2E2',
+    success: '#047857',
   },
   dark: {
     background: '#0B0F14',
@@ -31,6 +40,10 @@ export const palettes: Record<ColorScheme, AppColors> = {
     primary: '#2DD4BF',
     border: '#263040',
     tabInactive: '#9CA3AF',
+    onPrimary: '#042F2E',
+    danger: '#FCA5A5',
+    dangerSurface: '#3B1414',
+    success: '#6EE7B7',
   },
 };
 
