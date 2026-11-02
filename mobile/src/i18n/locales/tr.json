@@ -1,26 +1,127 @@
 {
+  "appName": "Harcama Takibi",
   "tabs": {
     "home": "Ana sayfa",
     "expenses": "Harcamalar",
     "report": "Rapor",
     "settings": "Ayarlar"
   },
+  "common": {
+    "retry": "Tekrar dene",
+    "cancel": "Vazgeç",
+    "save": "Kaydet",
+    "delete": "Sil",
+    "loading": "Yükleniyor…",
+    "optional": "isteğe bağlı"
+  },
+  "auth": {
+    "welcome": "Harcamalarını kolayca takip et.",
+    "loginTitle": "Giriş yap",
+    "registerTitle": "Hesap oluştur",
+    "email": "E-posta",
+    "password": "Şifre",
+    "displayName": "Adın",
+    "loginButton": "Giriş yap",
+    "registerButton": "Kayıt ol",
+    "toRegister": "Hesabın yok mu? Kayıt ol",
+    "toLogin": "Zaten hesabın var mı? Giriş yap",
+    "passwordHint": "8-72 karakter",
+    "logout": "Çıkış yap",
+    "validation": {
+      "email": "Geçerli bir e-posta adresi gir.",
+      "password": "Şifre 8-72 karakter olmalı.",
+      "passwordBytes": "Şifre çok uzun (Türkçe karakterler iki karakter sayılır).",
+      "passwordRequired": "Şifreni gir.",
+      "displayName": "Adın 1-60 karakter olmalı."
+    }
+  },
+  "errors": {
+    "NETWORK": "Sunucuya ulaşılamadı. İnternet bağlantını ve sunucu adresini kontrol et.",
+    "INVALID_CREDENTIALS": "E-posta veya şifre hatalı.",
+    "EMAIL_TAKEN": "Bu e-posta adresiyle zaten bir hesap var.",
+    "RATE_LIMITED": "Çok fazla deneme yapıldı. Biraz bekleyip tekrar dene.",
+    "VALIDATION_ERROR": "Bazı bilgiler geçersiz. Lütfen kontrol et.",
+    "CATEGORY_ARCHIVED": "Bu kategori arşivlenmiş. Başka bir kategori seç.",
+    "NOT_FOUND": "Kayıt bulunamadı. Silinmiş olabilir.",
+    "SESSION_ENDED": "Oturumun sona erdi. Lütfen tekrar giriş yap.",
+    "INTERNAL_ERROR": "Sunucuda bir hata oluştu. Daha sonra tekrar dene.",
+    "unknown": "Beklenmeyen bir hata oluştu."
+  },
+  "home": {
+    "greeting": "Merhaba, {{name}}",
+    "monthTotal": "{{month}} harcaman",
+    "expenseCount_one": "{{count}} harcama",
+    "expenseCount_other": "{{count}} harcama",
+    "addExpense": "Harcama ekle",
+    "recent": "Son harcamalar",
+    "seeAll": "Tümünü gör",
+    "emptyTitle": "Bu ay henüz harcama yok",
+    "emptyMessage": "İlk harcamanı ekleyerek başla."
+  },
+  "expenses": {
+    "title": "Harcamalar",
+    "add": "Yeni harcama",
+    "edit": "Harcamayı düzenle",
+    "allCategories": "Tümü",
+    "previousMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "emptyTitle": "Harcama bulunamadı",
+    "emptyMessage": "Bu ay ve filtre için kayıtlı harcama yok.",
+    "loadError": "Harcamalar yüklenemedi.",
+    "archived": "arşivlenmiş",
+    "deleted": "Harcama silindi.",
+    "saved": "Harcama kaydedildi.",
+    "form": {
+      "amount": "Tutar",
+      "amountPlaceholder": "0,00",
+      "category": "Kategori",
+      "date": "Tarih",
+      "description": "Açıklama",
+      "descriptionPlaceholder": "Örn. Haftalık market",
+      "note": "Not",
+      "paymentMethod": "Ödeme yöntemi",
+      "today": "Bugün",
+      "yesterday": "Dün",
+      "archivedCategoryHint": "Bu harcamanın kategorisi arşivlenmiş; kategoriyi değiştirmeden düzenleyebilirsin."
+    },
+    "validation": {
+      "amount": "Geçerli bir tutar gir (örn. 1.250,50). En fazla 2 ondalık basamak.",
+      "category": "Bir kategori seç.",
+      "date": "Tarih bugünden ileri olamaz.",
+      "description": "Açıklama en fazla 140 karakter olabilir.",
+      "note": "Not en fazla 500 karakter olabilir."
+    },
+    "paymentMethods": {
+      "none": "Belirtme",
+      "CASH": "Nakit",
+      "CARD": "Kart",
+      "OTHER": "Diğer"
+    },
+    "deleteConfirmTitle": "Harcama silinsin mi?",
+    "deleteConfirmMessage": "Bu işlem geri alınamaz."
+  },
+  "months": {
+    "1": "Ocak",
+    "2": "Şubat",
+    "3": "Mart",
+    "4": "Nisan",
+    "5": "Mayıs",
+    "6": "Haziran",
+    "7": "Temmuz",
+    "8": "Ağustos",
+    "9": "Eylül",
+    "10": "Ekim",
+    "11": "Kasım",
+    "12": "Aralık"
+  },
   "screens": {
-    "home": {
-      "title": "Ana sayfa",
-      "placeholder": "Bu ayın harcama özeti burada görünecek."
-    },
-    "expenses": {
-      "title": "Harcamalar",
-      "placeholder": "Harcama listesi burada görünecek."
-    },
     "report": {
       "title": "Rapor",
       "placeholder": "Aylık rapor ve grafikler burada görünecek."
     },
     "settings": {
       "title": "Ayarlar",
-      "placeholder": "Hesap ve uygulama ayarları burada görünecek."
+      "signedInAs": "Giriş yapılan hesap"
     }
   }
 }

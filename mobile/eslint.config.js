@@ -38,7 +38,7 @@ module.exports = defineConfig([
           },
           // Inside navigation options: test IDs and icon names are not user-facing text.
           // Patterns must match the whole name.
-          'object-properties': { exclude: ['[A-Z_-]+', '.*TestID', 'testID'] },
+          'object-properties': { exclude: ['[A-Z_-]+', '.*TestID', 'testID', 'presentation'] },
           callees: { exclude: ['t', 'i18n(ext)?', 'require', 'tabIcon'] },
         },
       ],

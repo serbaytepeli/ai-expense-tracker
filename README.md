@@ -109,9 +109,9 @@ Tüm değişkenler [`.env.example`](.env.example) dosyasında açıklanmıştır
 | Backend ile aynı makinedeki iOS simülatörü veya web | `http://127.0.0.1:8080/api/v1` |
 | Android emülatörü | `http://10.0.2.2:8080/api/v1` (emülatörden ana makineye özel adres) |
 | Gerçek telefon (Expo Go), aynı yerel ağ | Backend'i çalıştıran bilgisayarın yerel ağ IP'si, ör. `http://192.168.1.20:8080/api/v1`. Backend yalnızca `127.0.0.1`'i dinliyorsa telefon erişemez; backend'in ağ arayüzünü dinlemesi ve güvenlik duvarının izin vermesi gerekir |
-| Gerçek telefon, backend Claude Code Cloud'da | Bulut oturumu telefondan doğrudan erişilebilir değildir. Herkese açık bir tünel adresi veya dağıtılmış bir backend gerekir. Hangisinin kullanılacağı, cihazda backend ile deneme yapılacak ilk görevde (M1) kararlaştırılacak |
+| Gerçek telefon, backend Claude Code Cloud'da | Bulut oturumu telefondan doğrudan erişilebilir değildir. Cihaz denemesi backend'in Mac'te çalıştırılmasıyla yapılır (aşağıda "Mobil", 3. adım); dağıtılmış backend MVP sonrasıdır |
 
-`EXPO_PUBLIC_` önekli değerler uygulama paketine gömülür ve **gizli değildir**; bu değişkene asla anahtar veya şifre yazılmaz. M0 sonundaki Expo Go denemesi backend'e bağlanmayı gerektirmez (yalnızca boş ekranlar).
+`EXPO_PUBLIC_` önekli değerler uygulama paketine gömülür ve **gizli değildir**; bu değişkene asla anahtar veya şifre yazılmaz. Değişken verilmezse geliştirme sürümü paketi sunan bilgisayarın adresini kullanır (`src/config/apiBaseUrl.ts`).
 
 ### Backend (Java 21 + Spring Boot 4.1)
 
@@ -248,28 +248,39 @@ cd mobile && npm ci
 | `npm run export:check` | `expo export` ile iOS ve Android JavaScript paketlerini `dist/`'e üretir (yerel derleme değildir) |
 | `npm run api:generate` | `src/api/schema.ts` API tiplerini backend'in OpenAPI belgesinden (`../backend/build/openapi.json`) yeniden üretir. Önce `cd backend && ./gradlew exportOpenApi` (veritabanı gerekir) |
 
-**3. Telefonda dene (isteğe bağlı):** Telefona App Store / Google Play'den **Expo Go** kurulur, ardından:
+**3. Uygulamayı backend ile çalıştır (MacBook + iPhone, Expo Go).** Telefon ve Mac **aynı Wi-Fi ağında** olmalıdır.
 
-```bash
-cd mobile && npx expo start
-```
+1. Mac'te PostgreSQL 16, Java 21 ve Node 22 kurulu olsun (ör. `brew install postgresql@16 openjdk@21 node@22`).
+2. Backend'i yukarıdaki "Backend" adımlarıyla başlat (`scripts/dev-db.sh`, ortam değişkenleri, `./gradlew bootRun`). Backend tüm ağ arayüzlerinde `8080` portunu dinler; macOS güvenlik duvarı Java için gelen bağlantı sorarsa izin ver.
+3. Yeni bir terminalde:
 
-Terminaldeki QR kod Expo Go ile okutulur. Telefon ile geliştirme makinesi aynı ağda değilse `npx expo start --tunnel` gerekir. Claude Code Cloud'dan telefona bağlanma M0 kapanışında denenecek (development-plan.md, M0 kapanışı).
+   ```bash
+   cd mobile && npm ci && npx expo start
+   ```
+
+4. iPhone'a App Store'dan **Expo Go** kur, iPhone Kamera uygulamasıyla terminaldeki QR kodu okut ve "Expo Go'da aç"a dokun.
+
+`EXPO_PUBLIC_API_BASE_URL` verilmezse uygulama, paketi sunan bilgisayarın adresini kullanır (Metro `192.168.1.20:8081` ise backend `http://192.168.1.20:8080/api/v1`). Bu yüzden aynı Wi-Fi'de ek ayar gerekmez. Farklı bir backend için başlatmadan önce `export EXPO_PUBLIC_API_BASE_URL=https://…/api/v1` verilir. Simülatörde de aynı komut çalışır (`i` iOS, `a` Android).
+
+Sorun giderme: "Sunucuya ulaşılamadı" mesajında Mac'in IP'sini (`ipconfig getifaddr en0`) ve `curl http://<IP>:8080/actuator/health` yanıtını kontrol et. Misafir veya kurumsal ağlar cihazlar arası trafiği engelleyebilir; o durumda `npx expo start --tunnel` yalnızca paketi taşır, backend için yine erişilebilir bir adres gerekir.
 
 **Yapı**
 
 ```
 mobile/
   app/                 Expo Router ekranları (yalnızca route ve layout dosyaları)
-    _layout.tsx        kök layout: i18n, açık/koyu tema
+    _layout.tsx        kök layout: i18n, tema, TanStack Query, oturuma göre korunan rotalar
+    login.tsx, register.tsx   giriş ve kayıt (oturum yokken)
     (tabs)/            4 sekme: index (Ana sayfa), expenses, report, settings
+    expense/           new.tsx (ekle) ve [id].tsx (düzenle/sil), modal
   src/
     components/        ortak bileşenler
-    features/          özellik mantığı (M1'den itibaren)
+    features/          auth (oturum, token yenileme), expenses (form, para, liste), categories
+    config/            backend adresi (EXPO_PUBLIC_API_BASE_URL)
     i18n/              i18next kurulumu ve locales/tr.json
     theme/             renk paletleri ve useAppTheme
-    api/               schema.ts: backend OpenAPI belgesinden üretilen API tipleri (elle düzenlenmez)
-  __tests__/           testler (app/ içine test konmaz)
+    api/               client.ts (fetch + 401'de tek yenileme), schema.ts: OpenAPI'den üretilen tipler (elle düzenlenmez)
+  __tests__/           testler (app/ içine test konmaz); test-support/ sahte backend yardımcıları
 ```
 
 **Kurallar:** Ekranlarda ve bileşenlerde kullanıcıya görünen her metin `src/i18n/locales/tr.json`'dan `t('…')` ile gelir; sabit metin lint hatasıdır. Paket eklerken SDK uyumlu sürüm için `npx expo install <paket>` kullanılır.
