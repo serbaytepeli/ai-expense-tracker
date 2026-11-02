@@ -158,8 +158,17 @@ Kategori silme uç noktası yoktur. Tüm uç noktalar kimlik doğrulaması ister
   "createdAt": "2026-10-28T17:02:11Z", "updatedAt": "2026-10-28T17:02:11Z" }
 ```
 
+- Tüm alanlar yanıtta her zaman bulunur; `description`, `note`, `paymentMethod` boşsa `null`. `category`, harcamanın kategorisidir (arşivli olabilir: `archived: true`). `currency` kullanıcının para birimidir.
+
+Tüm uç noktalar kimlik doğrulaması ister; sahip her zaman JWT'deki kullanıcıdır. Başka kullanıcıya ait, bilinmeyen veya biçimi geçersiz `id` → 404 `NOT_FOUND`.
+
 ### `GET /expenses`
 Parametreler: `month=YYYY-MM` **veya** `from` + `to` (ikisi dahil), `categoryId`, `q` (açıklamada arama, en az 2 karakter), `page`, `size`. Sıralama: `date desc, createdAt desc`. → 200 sayfalı liste.
+- Hiç tarih parametresi yoksa tüm harcamalar listelenir.
+- `month` ile `from`/`to` birlikte verilemez; `from` ve `to` birlikte verilir; `from` ≤ `to`. Aksi halde 400 `VALIDATION_ERROR` (`errors[].field` ilgili parametre).
+- `categoryId`: kullanıcının kategorisi değilse sonuç boştur. Biçimi geçersizse 400.
+- `q`: kırpılır, 2–140 karakter; açıklamada büyük/küçük harf duyarsız (Türkçe `I/İ/ı/i` dahil, kategori adlarıyla aynı kural) içerir araması. `%` ve `_` joker değil, düz karakterdir. Not alanında arama yapılmaz.
+- `page` ≥ 0 (varsayılan 0), `size` 1–100 (varsayılan 20).
 
 ### `GET /expenses/{id}` → 200 · 404
 
@@ -168,18 +177,20 @@ Parametreler: `month=YYYY-MM` **veya** `from` + `to` (ikisi dahil), `categoryId`
 { "amount": "149.90", "date": "2026-10-28", "categoryId": "...",
   "description": "Haftalık market", "note": null, "paymentMethod": "CARD" }
 ```
-→ 201 + `Location` başlığı.
+→ 201 + `Location: /api/v1/expenses/{id}` başlığı.
 
-Doğrulama:
-- `amount`: string, desen `^[0-9]{1,12}(\.[0-9]{1,2})?$`, `> 0`, en fazla `999999999999.99`; yuvarlanmaz (database-design.md §2).
-- `date`: zorunlu; **kullanıcının saat dilimindeki bugünden ileri olamaz** (D-7) → aksi halde 400 `VALIDATION_ERROR`, `field: "date"`.
-- `categoryId`: kullanıcıya ait olmalı (aksi 404) ve aktif olmalı (arşivliyse 409 `CATEGORY_ARCHIVED`).
-- `description` ≤ 140, `note` ≤ 500, `paymentMethod` ∈ `CASH | CARD | OTHER | null`.
+Doğrulama (400 `VALIDATION_ERROR`, `errors[].field`):
+- `amount`: zorunlu; **JSON string** (JSON sayısı `149.90` reddedilir), desen `^[0-9]{1,12}(\.[0-9]{1,2})?$`, `> 0`, en fazla `999999999999.99`; yuvarlanmaz, `setScale(2)` ile normalize edilir (`"5"` → `"5.00"`) (database-design.md §2).
+- `date`: zorunlu, `YYYY-MM-DD`; **kullanıcının saat dilimindeki bugünden ileri olamaz** (D-7) → aksi halde `field: "date"`.
+- `categoryId`: zorunlu; kullanıcıya ait olmalı (aksi 404 `NOT_FOUND`) ve aktif olmalı (arşivliyse 409 `CATEGORY_ARCHIVED`).
+- `description` ≤ 140, `note` ≤ 500 karakter; kırpılarak saklanır, boş değer `null` olur. `paymentMethod` ∈ `CASH | CARD | OTHER | null`.
+- Biçimi bozuk JSON, tarih, UUID veya `paymentMethod` değeri → 400 `VALIDATION_ERROR` (alan bilgisi olmadan).
 
 ### `PUT /expenses/{id}`
-POST ile aynı gövde ve kurallar → 200. İstisna: harcamanın mevcut kategorisi arşivliyse, kategori değiştirilmeden düzenlenebilir.
+POST ile aynı gövde ve kurallar → 200 (tam değiştirme: gönderilmeyen isteğe bağlı alan `null` olur). İstisna: harcamanın mevcut kategorisi arşivliyse, kategori değiştirilmeden düzenlenebilir; başka bir kategoriye taşımak için hedef aktif olmalıdır. `createdAt` değişmez, `updatedAt` güncellenir.
 
 ### `DELETE /expenses/{id}` → 204 · 404
+Kalıcı silme (database-design.md §1); silinen harcamaya sonraki tüm istekler 404 döner.
 
 ## 6. Raporlar (`report` modülü)
 

@@ -41,24 +41,25 @@ class DatabaseInfrastructureTest extends DatabaseIntegrationTest {
     }
 
     @Test
-    void migrationsV1ToV4AreApplied() {
+    void migrationsV1ToV5AreApplied() {
         assertThat(flyway.info().applied())
                 .extracting(info -> info.getVersion().getVersion(), MigrationInfo::getDescription)
                 .containsExactly(
                         tuple("1", "create users"),
                         tuple("2", "create auth sessions and refresh tokens"),
                         tuple("3", "create categories"),
-                        tuple("4", "category name turkish case folding"));
+                        tuple("4", "category name turkish case folding"),
+                        tuple("5", "create expenses"));
     }
 
     @Test
-    void exactlyTheT11TablesExist() {
+    void exactlyTheExpectedTablesExist() {
         List<String> tables = jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = current_schema()
                   AND table_name <> 'flyway_schema_history'
                 ORDER BY table_name
                 """).query(String.class).list();
-        assertThat(tables).containsExactly("auth_sessions", "categories", "refresh_tokens", "users");
+        assertThat(tables).containsExactly("auth_sessions", "categories", "expenses", "refresh_tokens", "users");
     }
 }

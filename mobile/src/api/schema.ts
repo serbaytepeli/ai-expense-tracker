@@ -4,7 +4,23 @@
  */
 
 export interface paths {
-  '/api/v1/categories': {
+  '/api/v1/expenses/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['get'];
+    put: operations['update'];
+    post?: never;
+    delete: operations['delete'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/expenses': {
     parameters: {
       query?: never;
       header?: never;
@@ -14,6 +30,22 @@ export interface paths {
     get: operations['list'];
     put?: never;
     post: operations['create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['list_1'];
+    put?: never;
+    post: operations['create_1'];
     delete?: never;
     options?: never;
     head?: never;
@@ -129,18 +161,32 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch: operations['update'];
+    patch: operations['update_1'];
     trace?: never;
   };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    CreateCategoryRequest: {
-      /** @description Stored trimmed; 1-30 characters after trimming */
-      name: string;
-      icon: string;
-      color: string;
+    ExpenseRequest: {
+      /**
+       * @description JSON string, never a number
+       * @example 149.90
+       */
+      amount: string;
+      /**
+       * Format: date
+       * @description Not after today in the user's time zone
+       */
+      date: string;
+      /** Format: uuid */
+      categoryId: string;
+      /** @description Trimmed; at most 140 characters; blank = null */
+      description?: string | null;
+      /** @description Trimmed; at most 500 characters; blank = null */
+      note?: string | null;
+      /** @enum {string|null} */
+      paymentMethod?: 'CASH' | 'CARD' | 'OTHER' | null;
     };
     ProblemDetail: {
       /** Format: uri */
@@ -154,6 +200,39 @@ export interface components {
       properties?: {
         [key: string]: unknown;
       };
+    };
+    ExpenseCategory: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      icon: string;
+      color: string;
+      archived: boolean;
+    };
+    ExpenseResponse: {
+      /** Format: uuid */
+      id: string;
+      /** @example 149.90 */
+      amount: string;
+      /** @example TRY */
+      currency: string;
+      /** Format: date */
+      date: string;
+      category: components['schemas']['ExpenseCategory'];
+      description: string | null;
+      note: string | null;
+      /** @enum {string|null} */
+      paymentMethod: 'CASH' | 'CARD' | 'OTHER' | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CreateCategoryRequest: {
+      /** @description Stored trimmed; 1-30 characters after trimming */
+      name: string;
+      icon: string;
+      color: string;
     };
     CategoryResponse: {
       /** Format: uuid */
@@ -174,29 +253,29 @@ export interface components {
       timeZone?: string;
     };
     AuthResponse: {
-      accessToken?: string;
-      refreshToken?: string;
+      accessToken: string;
+      refreshToken: string;
       /** Format: int64 */
-      expiresIn?: number;
-      user?: components['schemas']['UserResponse'];
+      expiresIn: number;
+      user: components['schemas']['UserResponse'];
     };
     UserResponse: {
       /** Format: uuid */
-      id?: string;
-      email?: string;
-      displayName?: string;
-      currency?: string;
-      timeZone?: string;
-      locale?: string;
+      id: string;
+      email: string;
+      displayName: string;
+      currency: string;
+      timeZone: string;
+      locale: string;
     };
     RefreshRequest: {
       refreshToken: string;
     };
     TokenResponse: {
-      accessToken?: string;
-      refreshToken?: string;
+      accessToken: string;
+      refreshToken: string;
       /** Format: int64 */
-      expiresIn?: number;
+      expiresIn: number;
     };
     LoginRequest: {
       email: string;
@@ -210,6 +289,17 @@ export interface components {
       /** Format: int32 */
       sortOrder?: number;
     };
+    ExpensePageResponse: {
+      items: components['schemas']['ExpenseResponse'][];
+      /** Format: int32 */
+      page: number;
+      /** Format: int32 */
+      size: number;
+      /** Format: int64 */
+      totalItems: number;
+      /** Format: int32 */
+      totalPages: number;
+    };
   };
   responses: never;
   parameters: never;
@@ -219,7 +309,257 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The expense */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExpenseResponse'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExpenseRequest'];
+      };
+    };
+    responses: {
+      /** @description Replaced */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExpenseResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND (expense or category) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_ARCHIVED */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted permanently */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
   list: {
+    parameters: {
+      query?: {
+        /** @description YYYY-MM; not together with from/to */
+        month?: string;
+        /** @description YYYY-MM-DD, inclusive; together with to */
+        from?: string;
+        /** @description YYYY-MM-DD, inclusive; together with from */
+        to?: string;
+        categoryId?: string;
+        /** @description Text search in the description, at least 2 characters */
+        q?: string;
+        page?: string;
+        size?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Newest first (date desc, then createdAt desc) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExpensePageResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExpenseRequest'];
+      };
+    };
+    responses: {
+      /** @description Created; Location points to the new expense */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExpenseResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND (category) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_ARCHIVED */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  list_1: {
     parameters: {
       query?: {
         includeArchived?: boolean;
@@ -250,7 +590,7 @@ export interface operations {
       };
     };
   };
-  create: {
+  create_1: {
     parameters: {
       query?: never;
       header?: never;
@@ -570,7 +910,7 @@ export interface operations {
       };
     };
   };
-  update: {
+  update_1: {
     parameters: {
       query?: never;
       header?: never;

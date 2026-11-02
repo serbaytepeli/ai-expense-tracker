@@ -38,10 +38,23 @@ class RegistrationRollbackTest extends DatabaseIntegrationTest {
         @Bean
         @Primary
         CategoryApi failingCategoryApi(@Qualifier("categoryService") CategoryApi real) {
-            return userId -> {
-                real.createDefaultCategories(userId);
-                ATTEMPTED_USER.set(userId);
-                throw new IllegalStateException("simulated failure after inserting default categories");
+            return new CategoryApi() {
+                @Override
+                public void createDefaultCategories(UUID userId) {
+                    real.createDefaultCategories(userId);
+                    ATTEMPTED_USER.set(userId);
+                    throw new IllegalStateException("simulated failure after inserting default categories");
+                }
+
+                @Override
+                public java.util.Optional<CategorySummary> findForUser(UUID userId, UUID categoryId) {
+                    return real.findForUser(userId, categoryId);
+                }
+
+                @Override
+                public java.util.List<CategorySummary> listForUser(UUID userId) {
+                    return real.listForUser(userId);
+                }
             };
         }
     }

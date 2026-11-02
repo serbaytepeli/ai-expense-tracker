@@ -39,7 +39,7 @@ class FreshDatabaseMigrationTest extends DatabaseIntegrationTest {
             assertThat(result.success).isTrue();
             assertThat(result.initialSchemaVersion).isNull();
             assertThat(result.migrations).extracting(migration -> migration.version)
-                    .containsExactly("1", "2", "3", "4");
+                    .containsExactly("1", "2", "3", "4", "5");
             flyway.validate();
 
             List<String> tables = jdbc.sql("""
@@ -47,7 +47,7 @@ class FreshDatabaseMigrationTest extends DatabaseIntegrationTest {
                     WHERE table_schema = :schema AND table_name <> 'flyway_schema_history'
                     ORDER BY table_name
                     """).param("schema", schema).query(String.class).list();
-            assertThat(tables).containsExactly("auth_sessions", "categories", "refresh_tokens", "users");
+            assertThat(tables).containsExactly("auth_sessions", "categories", "expenses", "refresh_tokens", "users");
         } finally {
             // The schema name is generated above, never taken from input.
             jdbc.sql("DROP SCHEMA IF EXISTS " + schema + " CASCADE").update();
