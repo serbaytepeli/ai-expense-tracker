@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+  '/api/v1/categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['list'];
+    put?: never;
+    post: operations['create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/categories/{id}/unarchive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['unarchive'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/categories/{id}/archive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['archive'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/auth/register': {
     parameters: {
       query?: never;
@@ -68,15 +116,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/categories/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['update'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    RegisterRequest: {
-      email: string;
-      password: string;
-      displayName: string;
-      timeZone?: string;
+    CreateCategoryRequest: {
+      /** @description Stored trimmed; 1-30 characters after trimming */
+      name: string;
+      icon: string;
+      color: string;
     };
     ProblemDetail: {
       /** Format: uri */
@@ -90,6 +154,23 @@ export interface components {
       properties?: {
         [key: string]: unknown;
       };
+    };
+    CategoryResponse: {
+      /** Format: uuid */
+      id?: string;
+      name?: string;
+      icon?: string;
+      color?: string;
+      systemKey?: string;
+      /** Format: int32 */
+      sortOrder?: number;
+      archived?: boolean;
+    };
+    RegisterRequest: {
+      email: string;
+      password: string;
+      displayName: string;
+      timeZone?: string;
     };
     AuthResponse: {
       accessToken?: string;
@@ -120,6 +201,14 @@ export interface components {
       email: string;
       password: string;
     };
+    UpdateCategoryRequest: {
+      /** @description Stored trimmed; 1-30 characters after trimming */
+      name?: string;
+      icon?: string;
+      color?: string;
+      /** Format: int32 */
+      sortOrder?: number;
+    };
   };
   responses: never;
   parameters: never;
@@ -129,6 +218,186 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  list: {
+    parameters: {
+      query?: {
+        includeArchived?: boolean;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Categories ordered by sortOrder, then name */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'][];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCategoryRequest'];
+      };
+    };
+    responses: {
+      /** @description Created at the end of the list */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_NAME_TAKEN or CATEGORY_SORT_ORDER_LIMIT */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  unarchive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Active again (no-op if not archived) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_NAME_TAKEN */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  archive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Archived (no-op if already archived) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_PROTECTED */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
   register: {
     parameters: {
       query?: never;
@@ -291,6 +560,68 @@ export interface operations {
       };
       /** @description RATE_LIMITED */
       429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateCategoryRequest'];
+      };
+    };
+    responses: {
+      /** @description Updated (archived categories can be edited too) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description CATEGORY_NAME_TAKEN */
+      409: {
         headers: {
           [name: string]: unknown;
         };
