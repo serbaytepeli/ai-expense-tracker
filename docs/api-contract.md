@@ -110,7 +110,7 @@ Kimlik doğrulama gerekir. Gövde yok. Access token'daki `sid` oturumu iptal edi
 { "id": "...", "name": "Market", "icon": "cart-outline", "color": "#2E7D32",
   "systemKey": "GROCERIES", "sortOrder": 1, "archived": false }
 ```
-- `systemKey` yalnızca hazır kategorilerde dolu; kullanıcının oluşturduğu kategorilerde `null`.
+- Tüm alanlar yanıtta her zaman bulunur. `systemKey` yalnızca hazır kategorilerde dolu; kullanıcının oluşturduğu kategorilerde `null`.
 
 | Metot | Yol | Açıklama |
 |---|---|---|
@@ -123,14 +123,14 @@ Kimlik doğrulama gerekir. Gövde yok. Access token'daki `sid` oturumu iptal edi
 Kategori silme uç noktası yoktur. Tüm uç noktalar kimlik doğrulaması ister; sahip her zaman JWT'deki kullanıcıdır. Başka kullanıcıya ait, bilinmeyen veya biçimi geçersiz `id` → 404 `NOT_FOUND`.
 
 **Doğrulama** (400 `VALIDATION_ERROR`, `errors[].field`):
-- `name`: baştaki/sondaki boşluklar kırpılarak saklanır; kırpıldıktan sonra 1–30 karakter.
+- `name`: baştaki/sondaki boşluk karakterleri kırpılarak saklanır; kırpıldıktan sonra 1–30 karakter. Kırpılanlar: tüm Unicode `White_Space` karakterleri (normal boşluk, sekme, satır sonu, bölünmez boşluklar U+00A0/U+2007/U+202F, U+3000 vb.) ile görünmez U+200B ve U+FEFF. Aradaki boşluklara dokunulmaz.
 - `icon`: 1–40 karakter; yalnızca küçük harf `a-z`, rakam ve `-` (Ionicons adı biçimi; backend ikon listesi tutmaz).
 - `color`: `#RRGGBB`; büyük harfe çevrilerek saklanır.
 - `sortOrder`: 0–32767.
 
 **Ad benzersizliği:** Aynı kullanıcının **aktif** kategorileri arasında, kırpılmış ad üzerinde büyük/küçük harf duyarsız. Karşılaştırmayı veritabanı yapar (`uk_categories_user_active_name`, `lower(name)`); uygulama ayrıca karşılaştırma yapmaz. Arşivli kategorinin adı yeni kategoride kullanılabilir; bu durumda arşivli kategori arşivden çıkarılamaz (409 `CATEGORY_NAME_TAKEN`).
 
-**Sıralama:** Yeni kategori, kullanıcının (arşivliler dahil) en büyük `sortOrder` değerinin bir fazlasını alır. Bu değer 32767'yi aşacaksa kategori oluşturulmaz: 409 `CATEGORY_SORT_ORDER_LIMIT` (çözüm: mevcut bir kategorinin `sortOrder` değerini PATCH ile düşürmek).
+**Sıralama:** Yeni kategori, kullanıcının (arşivliler dahil) en büyük `sortOrder` değerinin bir fazlasını alır; aynı kullanıcının eşzamanlı oluşturma istekleri sırayla işlenir, böylece her yeni kategori ayrı bir değer alır. Bu değer 32767'yi aşacaksa kategori oluşturulmaz: 409 `CATEGORY_SORT_ORDER_LIMIT` (çözüm: mevcut bir kategorinin `sortOrder` değerini PATCH ile düşürmek).
 
 **Hazır kategoriler** (kayıtta oluşturulur; yeniden adlandırılabilir ve arşivlenebilir, `OTHER` arşivlenemez):
 

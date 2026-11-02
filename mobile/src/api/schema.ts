@@ -157,14 +157,15 @@ export interface components {
     };
     CategoryResponse: {
       /** Format: uuid */
-      id?: string;
-      name?: string;
-      icon?: string;
-      color?: string;
-      systemKey?: string;
+      id: string;
+      name: string;
+      icon: string;
+      color: string;
+      /** @description Set only for built-in categories (for example GROCERIES, OTHER) */
+      systemKey: string | null;
       /** Format: int32 */
-      sortOrder?: number;
-      archived?: boolean;
+      sortOrder: number;
+      archived: boolean;
     };
     RegisterRequest: {
       email: string;

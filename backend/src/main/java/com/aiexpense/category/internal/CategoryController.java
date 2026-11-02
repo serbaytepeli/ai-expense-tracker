@@ -1,5 +1,7 @@
 package com.aiexpense.category.internal;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,8 +55,16 @@ class CategoryController {
             @Min(0) @Max(CategoryService.SORT_ORDER_MAX) Integer sortOrder) {
     }
 
-    record CategoryResponse(UUID id, String name, String icon, String color, String systemKey, int sortOrder,
-            boolean archived) {
+    // Every field is always present in the response; systemKey is null for user-created categories.
+    record CategoryResponse(
+            @Schema(requiredMode = REQUIRED) UUID id,
+            @Schema(requiredMode = REQUIRED) String name,
+            @Schema(requiredMode = REQUIRED) String icon,
+            @Schema(requiredMode = REQUIRED) String color,
+            @Schema(requiredMode = REQUIRED, types = {"string", "null"},
+                    description = "Set only for built-in categories (for example GROCERIES, OTHER)") String systemKey,
+            @Schema(requiredMode = REQUIRED) int sortOrder,
+            @Schema(requiredMode = REQUIRED) boolean archived) {
     }
 
     private final CategoryService categories;

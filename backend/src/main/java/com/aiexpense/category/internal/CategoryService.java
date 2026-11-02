@@ -30,6 +30,8 @@ class CategoryService implements CategoryApi {
     static final int NAME_MAX = 30;
     static final int SORT_ORDER_MAX = Short.MAX_VALUE;
     static final String ACTIVE_NAME_CONSTRAINT = "uk_categories_user_active_name";
+    /** First key of the advisory lock that serializes sortOrder assignment (see CategoryRepository). */
+    static final int SORT_ORDER_LOCK_CLASS = 0x43415431;
 
     private static final Logger log = LoggerFactory.getLogger(CategoryService.class);
 
@@ -61,6 +63,7 @@ class CategoryService implements CategoryApi {
     @Transactional
     CategoryEntity create(UUID userId, String name, String icon, String color) {
         String normalizedName = normalizeName(name);
+        categories.lockSortOrderForUser(SORT_ORDER_LOCK_CLASS, userId);
         int next = categories.findMaxSortOrder(userId).map(max -> max + 1).orElse(1);
         if (next > SORT_ORDER_MAX) {
             throw new ApiException(HttpStatus.CONFLICT, "CATEGORY_SORT_ORDER_LIMIT",
@@ -136,17 +139,40 @@ class CategoryService implements CategoryApi {
     }
 
     /**
-     * Stored without surrounding whitespace, like the database check {@code btrim(name)}. Length is
-     * counted in characters (code points) as PostgreSQL does. Case-insensitive uniqueness is left
-     * to the database index on {@code lower(name)}, so Java and SQL can never disagree on it.
+     * Stored without surrounding blank characters. Java's {@code strip()} misses some of them
+     * (no-break spaces U+00A0/U+2007/U+202F, U+0085) and PostgreSQL's {@code btrim(name)} only
+     * removes U+0020, so the rule is defined here: every Unicode White_Space character plus the
+     * invisible U+200B (zero width space) and U+FEFF (BOM). The result never starts or ends with
+     * U+0020, so the database check {@code char_length(btrim(name))} sees exactly this value.
+     *
+     * <p>Length is counted in characters (code points) as PostgreSQL does. Case-insensitive
+     * uniqueness is left to the database index on {@code lower(name)} of this stored value, so
+     * Java and SQL can never disagree on it.
      */
     static String normalizeName(String name) {
-        String stripped = name == null ? "" : name.strip();
-        int length = stripped.codePointCount(0, stripped.length());
+        String trimmed = name == null ? "" : trimBlank(name);
+        int length = trimmed.codePointCount(0, trimmed.length());
         if (length < 1 || length > NAME_MAX) {
             throw ApiException.validation("name", "must be 1-" + NAME_MAX + " characters");
         }
-        return stripped;
+        return trimmed;
+    }
+
+    static boolean isBlank(int codePoint) {
+        return Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint)
+                || codePoint == 0x0085 || codePoint == 0x200B || codePoint == 0xFEFF;
+    }
+
+    private static String trimBlank(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && isBlank(value.codePointAt(start))) {
+            start += Character.charCount(value.codePointAt(start));
+        }
+        while (end > start && isBlank(value.codePointBefore(end))) {
+            end -= Character.charCount(value.codePointBefore(end));
+        }
+        return value.substring(start, end);
     }
 
     static String normalizeColor(String color) {

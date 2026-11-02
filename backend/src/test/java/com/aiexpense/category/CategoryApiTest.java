@@ -131,6 +131,53 @@ class CategoryApiTest extends DatabaseIntegrationTest {
                 .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
     }
 
+    /** Blank characters that Java's strip() or PostgreSQL's btrim() alone would keep. */
+    static final int[] BLANKS = {0x0020, 0x0009, 0x000A, 0x000D, 0x0085, 0x00A0, 0x1680, 0x2007, 0x200B,
+            0x202F, 0x2028, 0x3000, 0xFEFF};
+
+    @Test
+    void unicodeBlanksAroundTheNameAreTrimmedBeforeTheUniquenessCheck() throws Exception {
+        perform(create(token(), "Kitap", "book", "#000000")).andExpect(status().isCreated());
+
+        for (int blank : BLANKS) {
+            String padded = jsonEscape(blank) + "kitap" + jsonEscape(blank);
+            perform(create(token(), "{\"name\":\"" + padded + "\",\"icon\":\"a\",\"color\":\"#000000\"}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
+            perform(update(token(), idOf("BILLS"), "{\"name\":\"" + padded + "\"}"))
+                    .andExpect(status().isConflict());
+        }
+    }
+
+    @Test
+    void namesMadeOnlyOfUnicodeBlanksAreRejected() throws Exception {
+        for (int blank : BLANKS) {
+            String blanks = jsonEscape(blank).repeat(3);
+            expectValidationError(create(token(), "{\"name\":\"" + blanks + "\",\"icon\":\"a\",\"color\":\"#000000\"}"),
+                    "name");
+            expectValidationError(update(token(), idOf("BILLS"), "{\"name\":\"" + blanks + "\"}"), "name");
+        }
+    }
+
+    @Test
+    void storedNamesAreTrimmedAndKeepInnerSpaces() throws Exception {
+        perform(create(token(), "{\"name\":\"\\u00a0Kitap\\u00a0Evi\\u3000\",\"icon\":\"a\",\"color\":\"#000000\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Kitap\u00a0Evi"));
+        // 30 characters plus padding is still within the limit after trimming.
+        String thirty = "a".repeat(30);
+        perform(create(token(), "{\"name\":\"\\u202f" + thirty + "\\ufeff\",\"icon\":\"a\",\"color\":\"#000000\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value(thirty));
+
+        Integer untrimmed = jdbc.sql("""
+                SELECT count(*) FROM categories
+                WHERE user_id = :u AND (name <> btrim(name) OR name ~ '^[[:space:]\u00a0\u2007\u202f\u200b\ufeff]'
+                    OR name ~ '[[:space:]\u00a0\u2007\u202f\u200b\ufeff]$')""")
+                .param("u", UUID.fromString(user.userId())).query(Integer.class).single();
+        assertThat(untrimmed).isZero();
+    }
+
     @Test
     void renameToAnotherActiveCategorysNameIsRejected() throws Exception {
         String market = idOf("GROCERIES");
@@ -486,6 +533,10 @@ class CategoryApiTest extends DatabaseIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.errors[*].field", hasItem(field)));
+    }
+
+    private static String jsonEscape(int codePoint) {
+        return "\\u%04x".formatted(codePoint);
     }
 
     private static List<String> names(JsonNode categories) {
