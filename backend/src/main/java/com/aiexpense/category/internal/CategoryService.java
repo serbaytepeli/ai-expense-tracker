@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -53,6 +54,22 @@ class CategoryService implements CategoryApi {
                         (short) d.sortOrder(), now))
                 .toList();
         categories.saveAllAndFlush(defaults);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CategorySummary> findForUser(UUID userId, UUID categoryId) {
+        return categories.findByIdAndUserId(categoryId, userId).map(CategoryService::toSummary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategorySummary> listForUser(UUID userId) {
+        return categories.findForUser(userId, true).stream().map(CategoryService::toSummary).toList();
+    }
+
+    private static CategorySummary toSummary(CategoryEntity c) {
+        return new CategorySummary(c.getId(), c.name(), c.icon(), c.color(), c.archived());
     }
 
     @Transactional(readOnly = true)

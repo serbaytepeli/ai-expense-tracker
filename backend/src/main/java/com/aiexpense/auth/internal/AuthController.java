@@ -1,5 +1,7 @@
 package com.aiexpense.auth.internal;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -52,17 +54,21 @@ class AuthController {
         }
     }
 
-    record UserResponse(UUID id, String email, String displayName, String currency, String timeZone, String locale) {
+    // OpenAPI only: these fields are always present, so the generated client types must not be optional.
+    record UserResponse(@Schema(requiredMode = REQUIRED) UUID id, @Schema(requiredMode = REQUIRED) String email, @Schema(requiredMode = REQUIRED) String displayName,
+            @Schema(requiredMode = REQUIRED) String currency, @Schema(requiredMode = REQUIRED) String timeZone, @Schema(requiredMode = REQUIRED) String locale) {
     }
 
-    record AuthResponse(String accessToken, String refreshToken, long expiresIn, UserResponse user) {
+    record AuthResponse(@Schema(requiredMode = REQUIRED) String accessToken, @Schema(requiredMode = REQUIRED) String refreshToken,
+            @Schema(requiredMode = REQUIRED) long expiresIn, @Schema(requiredMode = REQUIRED) UserResponse user) {
         @Override
         public String toString() {
             return "AuthResponse[tokens=***, user=" + user.id() + "]";
         }
     }
 
-    record TokenResponse(String accessToken, String refreshToken, long expiresIn) {
+    record TokenResponse(@Schema(requiredMode = REQUIRED) String accessToken, @Schema(requiredMode = REQUIRED) String refreshToken,
+            @Schema(requiredMode = REQUIRED) long expiresIn) {
         @Override
         public String toString() {
             return "TokenResponse[tokens=***]";
