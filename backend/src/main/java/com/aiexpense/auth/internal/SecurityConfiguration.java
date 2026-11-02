@@ -43,7 +43,10 @@ class SecurityConfiguration {
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ProblemSecurityHandlers problems) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable) // bearer tokens only, no cookies
+                // CSRF needs credentials a browser sends automatically (cookies, sessions, Basic).
+                // This API accepts only an explicit Authorization: Bearer header, creates no session
+                // and sets no cookies, so CSRF does not apply. Guarded by StatelessSecurityRegressionTest.
+                .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
