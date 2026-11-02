@@ -2,7 +2,10 @@ package com.aiexpense.support;
 
 import java.security.SecureRandom;
 import java.util.Base64;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -20,6 +23,16 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest
 @AutoConfigureMockMvc
 public abstract class DatabaseIntegrationTest {
+
+    @Autowired
+    private JdbcClient cleanupJdbc;
+
+    /** Deletes users created through the API by tests (sessions and tokens cascade). */
+    @AfterEach
+    void deleteUsersCreatedByTests() {
+        cleanupJdbc.sql("DELETE FROM users WHERE email LIKE :pattern")
+                .param("pattern", "%" + AuthTestSupport.TEST_DOMAIN).update();
+    }
 
     static final String URL = "TEST_DB_URL";
     static final String USERNAME = "TEST_DB_USERNAME";

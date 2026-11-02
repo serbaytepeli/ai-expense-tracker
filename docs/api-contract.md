@@ -65,15 +65,20 @@ Yukarıda adı geçmeyen diğer HTTP hatalarında `code`, HTTP durumunun adıdı
 ```
 - `timeZone` isteğe bağlı (mobil cihazın saat dilimini gönderir); geçersiz veya boşsa `Europe/Istanbul`.
 - `currency` her zaman `TRY` olarak oluşturulur (D-3).
-- Hazır kategoriler aynı transaction içinde oluşturulur.
-- Hatalar: 400, 409 `EMAIL_TAKEN`, 429.
+- Hazır kategoriler aynı transaction içinde oluşturulur (**T1.3** ile; T1.2'de kayıt yalnızca kullanıcıyı ve oturumu oluşturur).
+- Doğrulama (400 `VALIDATION_ERROR`, `errors[].field`): `email` en fazla 254 karakter ve `ad@alan` biçimi; `password` 8–72 karakter **ve** UTF-8'de en fazla 72 bayt (BCrypt ilk 72 baytı kullanır; daha uzun şifre kırpılmaz, reddedilir); `displayName` kırpıldıktan sonra 1–60 karakter.
+- Hatalar: 400, 409 `EMAIL_TAKEN` (eşzamanlı iki kayıtta da yalnızca biri başarılı olur), 429 `RATE_LIMITED`.
 
 - E-posta kayıt ve girişte normalize edilir (database-design.md §3).
 
-Her başarılı kayıt/girişte yeni bir **oturum** oluşur. Access token (JWT, 15 dk) `sub` ve `sid` (oturum kimliği) içerir; korunan her istekte oturumun iptal edilmemiş olduğu kontrol edilir. Ayrıntılar: architecture.md §3.6.
+Her başarılı kayıt/girişte yeni bir **oturum** oluşur. Access token (JWT, HS256, 15 dk) `iss` (`ai-expense-tracker`), `sub` (kullanıcı kimliği) ve `sid` (oturum kimliği) içerir; korunan her istekte oturumun iptal edilmemiş olduğu kontrol edilir. Ayrıntılar: architecture.md §3.6.
+
+**Korumalı istekler:** Token yoksa, bozuksa veya imzası geçersizse 401 `UNAUTHORIZED`; süresi dolmuşsa 401 `TOKEN_EXPIRED`; oturumu iptal edilmişse (çıkış, yeniden kullanım, hesap silme) 401 `SESSION_REVOKED`. 401 yanıtlarında `WWW-Authenticate: Bearer` başlığı bulunur.
+
+**Hız sınırı** (istemci IP'si başına, bellek içi): giriş 5 dakikada 10 deneme, kayıt 1 saatte 10 deneme (başarılı ve başarısız denemeler sayılır). Aşılırsa 429 `RATE_LIMITED` ve pencerenin bitimine kalan saniye `Retry-After` başlığında.
 
 ### `POST /auth/login`
-`{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS`, 429 `RATE_LIMITED`.
+`{ "email", "password" }` → 200, register ile aynı yanıt. Hatalar: 401 `INVALID_CREDENTIALS` (yanlış şifre ve kayıtlı olmayan e-posta **aynı** yanıtı alır; ikisinde de BCrypt çalışır, süre farkı adresin kayıtlı olup olmadığını belli etmez), 429 `RATE_LIMITED`.
 
 ### `POST /auth/refresh`
 `{ "refreshToken" }` → 200 `{ accessToken, refreshToken, expiresIn }`. Gönderilen refresh token kullanılmış olarak işaretlenir ve aynı oturumda yenisi üretilir (rotasyon).

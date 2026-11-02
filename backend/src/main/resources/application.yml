@@ -74,6 +74,21 @@ logging:
 app:
   jwt:
     secret: ${JWT_SECRET:}
+  # docs/architecture.md section 3.6.
+  auth:
+    issuer: ai-expense-tracker
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+    # A rotated refresh token reused within this period is treated as a race (session stays
+    # open); later reuse is treated as theft and revokes the session.
+    reuse-grace-period: 30s
+    # Per client IP, in memory (one instance in the MVP).
+    login-rate-limit:
+      max-attempts: 10
+      window: 5m
+    register-rate-limit:
+      max-attempts: 10
+      window: 1h
   ai:
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${AI_MODEL:}

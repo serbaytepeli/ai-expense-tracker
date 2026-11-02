@@ -44,7 +44,7 @@ Her gereksinimin kabul kriterleri (AC) otomatik testle doğrulanabilecek şekild
 
 **AC**
 - Aynı e-postayla ikinci kayıt `409 EMAIL_TAKEN` döner (e-posta büyük/küçük harf duyarsız karşılaştırılır).
-- Şifre 8–72 karakterdir; kurala uymayan şifre formda ve sunucuda reddedilir.
+- Şifre 8–72 karakterdir ve UTF-8'de en fazla 72 bayttır (BCrypt sınırı; Türkçe karakterler 2 bayt sayılır); kurala uymayan şifre formda ve sunucuda reddedilir.
 - Şifre veritabanında yalnızca BCrypt özeti olarak bulunur; düz metin şifre hiçbir tabloda ve logda yer almaz (testle doğrulanır).
 - Yanlış e-posta veya şifre aynı `401 INVALID_CREDENTIALS` yanıtını döner; hangi alanın yanlış olduğu söylenmez.
 - E-posta kayıt ve girişte aynı şekilde normalize edilir (boşluk kırpma + `Locale.ROOT` ile küçük harf; database-design.md §3).

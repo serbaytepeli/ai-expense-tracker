@@ -88,7 +88,7 @@ ai-expense-tracker/
 | Veri erişimi | Spring Data JPA (CRUD) + rapor ve kota için `JdbcClient` ile SQL |
 | Migration | Flyway |
 | Doğrulama | Jakarta Bean Validation (biçim) + servis katmanı (zamana ve kullanıcıya bağlı kurallar) |
-| Güvenlik | Spring Security, stateless JWT (HS256), BCrypt cost 12 |
+| Güvenlik | Spring Security + Spring OAuth2 Resource Server (Nimbus JOSE), stateless JWT (HS256, `JWT_SECRET`), BCrypt cost 12. Ayrı bir JWT kütüphanesi yok |
 | Hata formatı | RFC 9457 `application/problem+json` |
 | API dokümantasyonu | springdoc-openapi; `/v3/api-docs` ve Swagger UI yalnızca `dev` profilinde |
 | Profiller | Varsayılan ayarlar üretim kadar güvenli (Swagger kapalı, health ayrıntısız, stack trace yok, yalnızca `health` açık). `dev` yalnızca geliştirme kolaylıklarını açar; `prod` güvenli ayarları açıkça tekrar eder |
@@ -172,7 +172,9 @@ Yapılandırma `@ConfigurationProperties` + `@Validated` sınıflarıyla okunur;
 
 **Log ve gizlilik:** İstek/yanıt gövdeleri loglanmaz. `Authorization` başlığı, `password`, `refreshToken`, `accessToken` alanları log maskeleme kuralıyla gizlenir. Testler, kayıt/giriş/yenileme sırasında yakalanan log çıktısında şifre ve token değerlerinin bulunmadığını doğrular.
 
-**Hız sınırı:** Giriş ve kayıtta IP başına (bellek içi, uygulama örneği başına) sınır; MVP için yeterli, üretimde yeniden değerlendirilir.
+**Hız sınırı:** Giriş (5 dakikada 10) ve kayıtta (1 saatte 10) IP başına, sabit pencereli, bellek içi sınır (`app.auth.*-rate-limit`); MVP için yeterli, çok örnekli çalışmada paylaşılan depoya taşınır (P-4). İstemci IP'si `request.getRemoteAddr()`; bir ters vekil arkasında çalışırken güvenilir `X-Forwarded-For` ayarı dağıtım aşamasında yapılmalıdır.
+
+**Uygulama notları (T1.2):** Oturum ve token tabloları, satır kilidi ve koşullu güncelleme gerektiği için `JdbcClient` ile, `users` JPA ile yönetilir. Refresh işlemi `ApiException`'da geri alınmaz; böylece yeniden kullanımda oturum iptali 401 dönülse de kalıcı olur. Güvenlik katmanının 401/403 yanıtları ve `/error` yolu da proje problem biçimini kullanır.
 
 ### 3.7 Para ve zaman
 - Para kuralları: database-design.md §2 (tek kaynak).
