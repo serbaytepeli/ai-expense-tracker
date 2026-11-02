@@ -128,7 +128,7 @@ Kategori silme uç noktası yoktur. Tüm uç noktalar kimlik doğrulaması ister
 - `color`: `#RRGGBB`; büyük harfe çevrilerek saklanır.
 - `sortOrder`: 0–32767.
 
-**Ad benzersizliği:** Aynı kullanıcının **aktif** kategorileri arasında, kırpılmış ad üzerinde büyük/küçük harf duyarsız. Karşılaştırmayı veritabanı yapar (`uk_categories_user_active_name`, `lower(name)`); uygulama ayrıca karşılaştırma yapmaz. Arşivli kategorinin adı yeni kategoride kullanılabilir; bu durumda arşivli kategori arşivden çıkarılamaz (409 `CATEGORY_NAME_TAKEN`).
+**Ad benzersizliği:** Aynı kullanıcının **aktif** kategorileri arasında, kırpılmış ad üzerinde, Türkçe harfler dahil büyük/küçük harf duyarsız: `I`, `İ`, `ı`, `i` aynı harf sayılır ("ULAŞIM" = "Ulaşım", "GİYİM" = "Giyim"). Karşılaştırmayı veritabanı yapar (`uk_categories_user_active_name`, database-design.md); uygulama ayrıca karşılaştırma yapmaz. Arşivli kategorinin adı yeni kategoride kullanılabilir; bu durumda arşivli kategori arşivden çıkarılamaz (409 `CATEGORY_NAME_TAKEN`).
 
 **Sıralama:** Yeni kategori, kullanıcının (arşivliler dahil) en büyük `sortOrder` değerinin bir fazlasını alır; aynı kullanıcının eşzamanlı oluşturma istekleri sırayla işlenir, böylece her yeni kategori ayrı bir değer alır. Bu değer 32767'yi aşacaksa kategori oluşturulmaz: 409 `CATEGORY_SORT_ORDER_LIMIT` (çözüm: mevcut bir kategorinin `sortOrder` değerini PATCH ile düşürmek).
 

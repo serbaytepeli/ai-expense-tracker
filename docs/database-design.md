@@ -108,7 +108,7 @@ Bir giriş = bir oturum (token ailesi). Rotasyonla üretilen tüm refresh token'
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
 
 Kısıtlar / indeksler:
-- `UNIQUE (user_id, lower(name)) WHERE archived_at IS NULL`
+- `UNIQUE (user_id, lower(translate(name, 'ÇĞİIıÖŞÜ', 'çğiiiöşü'))) WHERE archived_at IS NULL` (`uk_categories_user_active_name`, V4) — Türkçe dahil büyük/küçük harf duyarsız: `I`, `İ`, `ı` ve `i` aynı harf sayılır ("ULAŞIM" = "Ulaşım", "GİYİM" = "Giyim", "IPTV" = "iptv"). Türkçe harfler açıkça eşlendiği için sonuç veritabanı locale'ine bağlı değildir. Uygulama ad karşılaştırması yapmaz; ad kırpılmış olarak saklanır.
 - `UNIQUE (user_id, system_key) WHERE system_key IS NOT NULL`
 - `UNIQUE (id, user_id)` — bileşik FK hedefi
 - `CHECK (NOT (system_key = 'OTHER' AND archived_at IS NOT NULL))` — "Diğer" arşivlenemez
@@ -256,8 +256,9 @@ GROUP BY 1 ORDER BY 1;
 | `V1__create_users.sql` | `users` | T1.1 |
 | `V2__create_auth_sessions_and_refresh_tokens.sql` | `auth_sessions`, `refresh_tokens` | T1.1 |
 | `V3__create_categories.sql` | `categories` + kısıtlar | T1.1 |
-| `V4__create_expenses.sql` | `expenses` + bileşik FK + indeksler (tarih kısıtı yok) | T2.1 |
-| `V5__create_ai_generation_tables.sql` | `ai_generation_requests`, `ai_insights` | T4.1 |
+| `V4__category_name_turkish_case_folding.sql` | Kategori adı benzersizlik indeksi Türkçe harf katlamasıyla yeniden oluşturulur | T1.3 |
+| `V5__create_expenses.sql` | `expenses` + bileşik FK + indeksler (tarih kısıtı yok) | T2.1 |
+| `V6__create_ai_generation_tables.sql` | `ai_generation_requests`, `ai_insights` | T4.1 |
 
 Hazır kategori listesi uygulama kodunda sabittir; migration'larda seed verisi yoktur.
 

@@ -111,7 +111,7 @@ Bağımlılık sırası: **T0.1 → T0.2 → T0.3 → T0.4 → T0.5 → T0.6.** 
 
 ### M2 — Harcamalar
 
-**T2.1 Migration V4 + harcama uç noktaları** — AC:
+**T2.1 Migration V5 + harcama uç noktaları** — AC:
 - FR-2 AC'leri API testleriyle; bileşik FK ve iki kullanıcılı izolasyon testleri.
 - İleri tarih kuralı **servis katmanında**, sabit `Clock` ile: `Europe/Istanbul` kullanıcısı için UTC 20:59 ve 21:00 anlarında "bugün"ün değiştiği; `Pacific/Kiritimati` (UTC+14) ve `Pacific/Pago_Pago` (UTC−11) kullanıcıları için aynı UTC anında farklı "bugün" kabul edildiği; ay sonu ve yıl sonu gece yarısı geçişleri.
 - Para: `"0"`, `"-1"`, `"1.234"`, `"1e3"`, `"1,5"`, `"1000000000000.00"` reddedilir; `"5"` → `"5.00"`, `"999999999999.99"` kabul edilir.
@@ -127,7 +127,7 @@ Bağımlılık sırası: **T0.1 → T0.2 → T0.3 → T0.4 → T0.5 → T0.6.** 
 
 ### M4 — AI yorumları
 
-**T4.1 Migration V5 + `InsightPayload` + parmak izi + sahte sağlayıcı** — AC: İzin listesi testi (açıklama/not/ad/e-posta/kullanıcı kimliği içeren test verisiyle yükte bunların bulunmadığı); kanonik JSON ile aynı veri → aynı parmak izi, farklı veri → farklı parmak izi; S-1 ve S-2 kararları uygulanmış.
+**T4.1 Migration V6 + `InsightPayload` + parmak izi + sahte sağlayıcı** — AC: İzin listesi testi (açıklama/not/ad/e-posta/kullanıcı kimliği içeren test verisiyle yükte bunların bulunmadığı); kanonik JSON ile aynı veri → aynı parmak izi, farklı veri → farklı parmak izi; S-1 ve S-2 kararları uygulanmış.
 **T4.2 Anthropic adaptörü + istem şablonu v1** — AC (WireMock ile; gerçek API çağrılmaz): başarı; zaman aşımı → 1 yeniden deneme → `FAILED/PROVIDER_TIMEOUT`; HTTP 429/5xx → 1 yeniden deneme; 4xx (429 hariç) → yeniden denenmez; şemaya uymayan yanıt → `FAILED/INVALID_RESPONSE`; `ANTHROPIC_API_KEY` boş → `FAILED/NOT_CONFIGURED`; istek gövdesinde yalnızca izin verilen alanlar; anahtar loglarda yok; model adı `AI_MODEL`'den.
 **T4.3 Insight uç noktaları, rezervasyon ve kota** — AC (gerçek PostgreSQL, sabit `Clock`):
 - Aynı veri ikinci kez → 200, AI çağrılmaz, kota değişmez.

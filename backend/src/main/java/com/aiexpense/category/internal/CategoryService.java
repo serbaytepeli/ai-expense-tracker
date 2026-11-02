@@ -146,8 +146,9 @@ class CategoryService implements CategoryApi {
      * U+0020, so the database check {@code char_length(btrim(name))} sees exactly this value.
      *
      * <p>Length is counted in characters (code points) as PostgreSQL does. Case-insensitive
-     * uniqueness is left to the database index on {@code lower(name)} of this stored value, so
-     * Java and SQL can never disagree on it.
+     * uniqueness, including the Turkish I/ı/İ/i, is left to the database index
+     * {@code uk_categories_user_active_name} (migration V4) on this stored value, so Java and SQL
+     * can never disagree on it.
      */
     static String normalizeName(String name) {
         String trimmed = name == null ? "" : trimBlank(name);

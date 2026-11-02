@@ -112,7 +112,7 @@ class CategoryApiTest extends DatabaseIntegrationTest {
                 .andExpect(status().isCreated());
     }
 
-    // --- name uniqueness (database index on lower(name), active categories only) -------------------
+    // --- name uniqueness (database index uk_categories_user_active_name, active categories only) ------
 
     @Test
     void duplicateNamesAreRejectedIgnoringCaseAndSurroundingSpaces() throws Exception {
@@ -176,6 +176,51 @@ class CategoryApiTest extends DatabaseIntegrationTest {
                     OR name ~ '[[:space:]\u00a0\u2007\u202f\u200b\ufeff]$')""")
                 .param("u", UUID.fromString(user.userId())).query(Integer.class).single();
         assertThat(untrimmed).isZero();
+    }
+
+    @Test
+    void turkishCaseVariantsOfBuiltInNamesAreDuplicates() throws Exception {
+        // Built-in: Ulaşım, Giyim, Eğitim, Sağlık, Eğlence, Diğer, Yeme-İçme.
+        for (String name : new String[] {"ULAŞIM", "ulaşim", "  UlaşIm ", "GİYİM", "GIYIM", "giyım", "EĞİTİM",
+                "eğıtım", "SAĞLIK", "sağlik", "EĞLENCE", "DİĞER", "dığer", "YEME-İÇME", "yeme-ıçme"}) {
+            perform(create(token(), name, "a", "#000000"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
+        }
+        assertThat(body(listAll(token())).size()).isEqualTo(11);
+    }
+
+    @Test
+    void turkishLettersAreComparedCaseInsensitively() throws Exception {
+        perform(create(token(), "Şöför Ücreti", "a", "#000000")).andExpect(status().isCreated());
+        perform(create(token(), "IPTV", "a", "#000000")).andExpect(status().isCreated());
+
+        for (String name : new String[] {"ŞÖFÖR ÜCRETİ", "şöför ücreti", "ŞÖFÖR ÜCRETI", "iptv", "İPTV", "ıptv"}) {
+            perform(create(token(), name, "a", "#000000"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
+        }
+        // The stored name keeps the user's spelling.
+        assertThat(names(body(list(token())))).contains("Şöför Ücreti", "IPTV");
+    }
+
+    @Test
+    void turkishCaseVariantsBlockRenameAndUnarchive() throws Exception {
+        // "Ulaşım" has a dotless ı: plain lower() would see "ULAŞIM" as a different name.
+        perform(update(token(), idOf("BILLS"), "{\"name\":\"ULAŞIM\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
+
+        String transport = idOf("TRANSPORT");
+        perform(archive(token(), transport)).andExpect(status().isOk());
+        perform(create(token(), "ULAŞIM", "a", "#000000")).andExpect(status().isCreated());
+        perform(unarchive(token(), transport))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORY_NAME_TAKEN"));
+        // Renaming a category to a Turkish case variant of its own name is fine.
+        perform(update(token(), idOf("CLOTHING"), "{\"name\":\"GİYİM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("GİYİM"));
     }
 
     @Test
@@ -324,7 +369,7 @@ class CategoryApiTest extends DatabaseIntegrationTest {
         String transport = idOf("TRANSPORT");
         perform(archive(token(), transport)).andExpect(status().isOk());
 
-        perform(create(token(), "  ulaşım ", "car", "#000000")).andExpect(status().isCreated());
+        perform(create(token(), "  ULAŞIM ", "car", "#000000")).andExpect(status().isCreated());
 
         perform(unarchive(token(), transport))
                 .andExpect(status().isConflict())
