@@ -3,10 +3,124 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = Record<string, never>;
+export interface paths {
+  '/api/v1/auth/register': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['register'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/refresh': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['refresh'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['logout'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['login'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+}
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: never;
+  schemas: {
+    RegisterRequest: {
+      email: string;
+      password: string;
+      displayName: string;
+      timeZone?: string;
+    };
+    ProblemDetail: {
+      /** Format: uri */
+      type?: string;
+      title?: string;
+      /** Format: int32 */
+      status?: number;
+      detail?: string;
+      /** Format: uri */
+      instance?: string;
+      properties?: {
+        [key: string]: unknown;
+      };
+    };
+    AuthResponse: {
+      accessToken?: string;
+      refreshToken?: string;
+      /** Format: int64 */
+      expiresIn?: number;
+      user?: components['schemas']['UserResponse'];
+    };
+    UserResponse: {
+      /** Format: uuid */
+      id?: string;
+      email?: string;
+      displayName?: string;
+      currency?: string;
+      timeZone?: string;
+      locale?: string;
+    };
+    RefreshRequest: {
+      refreshToken: string;
+    };
+    TokenResponse: {
+      accessToken?: string;
+      refreshToken?: string;
+      /** Format: int64 */
+      expiresIn?: number;
+    };
+    LoginRequest: {
+      email: string;
+      password: string;
+    };
+  };
   responses: never;
   parameters: never;
   requestBodies: never;
@@ -14,4 +128,176 @@ export interface components {
   pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+  register: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RegisterRequest'];
+      };
+    };
+    responses: {
+      /** @description Registered; a new session starts */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description EMAIL_TAKEN */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description RATE_LIMITED */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  refresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RefreshRequest'];
+      };
+    };
+    responses: {
+      /** @description New token pair in the same session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TokenResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED, SESSION_REVOKED, TOKEN_ALREADY_ROTATED or TOKEN_REUSED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  logout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Session revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description UNAUTHORIZED, TOKEN_EXPIRED or SESSION_REVOKED */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+  login: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginRequest'];
+      };
+    };
+    responses: {
+      /** @description Logged in; a new session starts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthResponse'];
+        };
+      };
+      /** @description VALIDATION_ERROR */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description INVALID_CREDENTIALS */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+      /** @description RATE_LIMITED */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetail'];
+        };
+      };
+    };
+  };
+}

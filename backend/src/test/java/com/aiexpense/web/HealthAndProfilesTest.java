@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.aiexpense.support.AuthTestSupport;
 import com.aiexpense.support.DatabaseIntegrationTest;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Health endpoint and profile-dependent exposure: the default and "prod" profiles expose only
- * {"status":"UP"} and no Swagger; "dev" adds health details and Swagger.
+ * {"status":"UP"} and no Swagger; "dev" adds health details and Swagger. Other actuator endpoints
+ * are not exposed: without a token they answer 401, and even WITH a valid token 404.
  */
 class HealthAndProfilesTest {
 
@@ -46,7 +48,9 @@ class HealthAndProfilesTest {
             "/actuator/metrics"
         })
         void otherActuatorEndpointsAreNotExposed(String path) throws Exception {
-            mvc.perform(get(path)).andExpect(status().isNotFound());
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            String token = AuthTestSupport.register(mvc, AuthTestSupport.uniqueEmail()).accessToken();
+            mvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
         }
 
         @Test
@@ -78,8 +82,10 @@ class HealthAndProfilesTest {
 
         @Test
         void otherActuatorEndpointsAreNotExposed() throws Exception {
+            String token = AuthTestSupport.register(mvc, AuthTestSupport.uniqueEmail()).accessToken();
             for (String path : NOT_EXPOSED_ACTUATOR_ENDPOINTS) {
-                mvc.perform(get(path)).andExpect(status().isNotFound());
+                mvc.perform(get(path)).andExpect(status().isUnauthorized());
+                mvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
             }
         }
     }
@@ -108,8 +114,10 @@ class HealthAndProfilesTest {
 
         @Test
         void otherActuatorEndpointsAreStillNotExposed() throws Exception {
+            String token = AuthTestSupport.register(mvc, AuthTestSupport.uniqueEmail()).accessToken();
             for (String path : NOT_EXPOSED_ACTUATOR_ENDPOINTS) {
-                mvc.perform(get(path)).andExpect(status().isNotFound());
+                mvc.perform(get(path)).andExpect(status().isUnauthorized());
+                mvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
             }
         }
     }

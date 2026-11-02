@@ -31,6 +31,8 @@ dependencies {
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.flyway)
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.oauth2.resource.server)
     implementation(libs.flyway.database.postgresql)
     implementation(libs.springdoc.webmvc.ui)
     runtimeOnly(libs.postgresql)
