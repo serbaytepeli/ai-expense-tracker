@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { ScrollView } from 'react-native';
 
 import { ErrorBanner, LoadingView } from '../../src/components/ui';
 import { useCategories } from '../../src/features/categories/api';
@@ -20,12 +20,16 @@ export default function NewExpenseScreen() {
   }
   if (categories.isError) {
     return (
-      <View style={{ padding: 20 }}>
+      // Same inset as the form: the iOS modal header is drawn over the screen.
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ padding: 20 }}
+      >
         <ErrorBanner
           message={errorMessage(t, categories.error)}
           onRetry={() => void categories.refetch()}
         />
-      </View>
+      </ScrollView>
     );
   }
   return (
