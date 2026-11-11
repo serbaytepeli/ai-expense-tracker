@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError } from '../../api/errors';
 import type { Category, Expense } from '../../api/types';
@@ -119,225 +120,235 @@ export function ExpenseForm({ categories, expense, onSave, onDelete }: ExpenseFo
   };
 
   return (
-    // iOS: the form opens in a native-stack modal whose header is translucent and drawn over the
-    // screen (iOS 26+ always lays the screen out under the navigation bar). "automatic" insets the
-    // content below the header and above the home indicator; the keyboard inset is computed
-    // natively in the ScrollView's own coordinates, which stays correct inside a modal sheet.
-    // Android ignores both props: the screen starts below the header and the window resizes for
-    // the keyboard.
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      automaticallyAdjustKeyboardInsets
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      style={[styles.flex, { backgroundColor: colors.background }]}
-      testID="expense-form"
-    >
-      {serverError ? <ErrorBanner message={serverError} /> : null}
+    // The form opens in a native-stack modal. On iOS the header can be drawn over the screen
+    // (react-native-screens lays iOS 26+ screens out under the navigation bar), so the form is
+    // placed below it by a SafeAreaView whose insets come from this nested provider: the
+    // provider reports UIKit's safe area for its own frame, i.e. exactly the part covered by the
+    // header (0 when the screen already starts below it) and the home indicator.
+    // The ScrollView itself must not use contentInsetAdjustmentBehavior="automatic": when the
+    // keyboard opens, React Native's automaticallyAdjustKeyboardInsets clamps the scroll offset
+    // to contentInset.top, which ignores the automatic (adjusted) inset and scrolled the top of
+    // the form back under the header.
+    <SafeAreaProvider style={styles.flex}>
+      <SafeAreaView
+        edges={['top', 'bottom']}
+        style={[styles.flex, { backgroundColor: colors.background }]}
+        testID="expense-form-safe-area"
+      >
+        <ScrollView
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          style={styles.flex}
+          testID="expense-form"
+        >
+          {serverError ? <ErrorBanner message={serverError} /> : null}
 
-      <Controller
-        control={control}
-        name="amount"
-        render={({ field }) => (
-          <TextField
-            label={t('expenses.form.amount')}
-            value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            keyboardType="decimal-pad"
-            placeholder={t('expenses.form.amountPlaceholder')}
-            autoFocus={!expense}
-            style={styles.amountInput}
-            error={errors.amount ? t('expenses.validation.amount') : undefined}
-            testID="expense-amount"
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="categoryId"
-        render={({ field }) => (
-          <View style={styles.group}>
-            <FieldLabel>{t('expenses.form.category')}</FieldLabel>
-            <View style={styles.categoryGrid}>
-              {options.map((category) => {
-                const selected = field.value === category.id;
-                return (
-                  <Pressable
-                    key={category.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={category.name}
-                    onPress={() => field.onChange(category.id)}
-                    testID={`category-${category.id}`}
-                    style={[
-                      styles.categoryChip,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: selected ? category.color : colors.border,
-                        borderWidth: selected ? 2 : 1,
-                      },
-                    ]}
-                  >
-                    <CategoryBadge icon={category.icon} color={category.color} size={32} />
-                    <Text numberOfLines={1} style={[styles.chipText, { color: colors.text }]}>
-                      {category.name}
-                      {category.archived ? ` (${t('expenses.archived')})` : ''}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {expense?.category.archived ? (
-              <Text style={{ color: colors.textMuted }}>
-                {t('expenses.form.archivedCategoryHint')}
-              </Text>
-            ) : null}
-            <FieldError
-              message={errors.categoryId ? t('expenses.validation.category') : undefined}
-            />
-          </View>
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="date"
-        render={({ field }) => (
-          <View style={styles.group}>
-            <FieldLabel>{t('expenses.form.date')}</FieldLabel>
-            <View style={styles.row}>
-              {[
-                { iso: today, label: t('expenses.form.today') },
-                { iso: yesterdayIso(today), label: t('expenses.form.yesterday') },
-              ].map((option) => (
-                <Chip
-                  key={option.iso}
-                  label={option.label}
-                  selected={field.value === option.iso}
-                  onPress={() => field.onChange(option.iso)}
-                />
-              ))}
-              {Platform.OS === 'ios' ? (
-                <DateTimePicker
-                  value={fromIsoDate(field.value)}
-                  mode="date"
-                  display="compact"
-                  locale="tr-TR"
-                  maximumDate={fromIsoDate(today)}
-                  onChange={(_: DateTimePickerEvent, date?: Date) => {
-                    if (date) {
-                      field.onChange(toIsoDate(date));
-                    }
-                  }}
-                  testID="expense-date-picker"
-                />
-              ) : (
-                <Chip
-                  label={formatDate(t, field.value)}
-                  selected
-                  onPress={() => setShowAndroidPicker(true)}
-                  testID="expense-date"
-                />
-              )}
-            </View>
-            {Platform.OS !== 'ios' && showAndroidPicker ? (
-              <DateTimePicker
-                value={fromIsoDate(field.value)}
-                mode="date"
-                maximumDate={fromIsoDate(today)}
-                onChange={(event: DateTimePickerEvent, date?: Date) => {
-                  setShowAndroidPicker(false);
-                  if (event.type === 'set' && date) {
-                    field.onChange(toIsoDate(date));
-                  }
-                }}
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field }) => (
+              <TextField
+                label={t('expenses.form.amount')}
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                keyboardType="decimal-pad"
+                placeholder={t('expenses.form.amountPlaceholder')}
+                autoFocus={!expense}
+                style={styles.amountInput}
+                error={errors.amount ? t('expenses.validation.amount') : undefined}
+                testID="expense-amount"
               />
-            ) : null}
-            <FieldError message={errors.date ? t('expenses.validation.date') : undefined} />
-          </View>
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="description"
-        render={({ field }) => (
-          <TextField
-            label={t('expenses.form.description')}
-            hint={t('common.optional')}
-            value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            placeholder={t('expenses.form.descriptionPlaceholder')}
-            maxLength={140}
-            error={errors.description ? t('expenses.validation.description') : undefined}
-            testID="expense-description"
+            )}
           />
-        )}
-      />
 
-      <Controller
-        control={control}
-        name="paymentMethod"
-        render={({ field }) => (
-          <View style={styles.group}>
-            <FieldLabel>{t('expenses.form.paymentMethod')}</FieldLabel>
-            <View style={styles.row}>
-              {(['none', ...PAYMENT_METHODS] as const).map((method) => (
-                <Chip
-                  key={method}
-                  label={t(`expenses.paymentMethods.${method}`)}
-                  selected={field.value === method}
-                  onPress={() => field.onChange(method)}
-                  testID={`payment-${method}`}
+          <Controller
+            control={control}
+            name="categoryId"
+            render={({ field }) => (
+              <View style={styles.group}>
+                <FieldLabel>{t('expenses.form.category')}</FieldLabel>
+                <View style={styles.categoryGrid}>
+                  {options.map((category) => {
+                    const selected = field.value === category.id;
+                    return (
+                      <Pressable
+                        key={category.id}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={category.name}
+                        onPress={() => field.onChange(category.id)}
+                        testID={`category-${category.id}`}
+                        style={[
+                          styles.categoryChip,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: selected ? category.color : colors.border,
+                            borderWidth: selected ? 2 : 1,
+                          },
+                        ]}
+                      >
+                        <CategoryBadge icon={category.icon} color={category.color} size={32} />
+                        <Text numberOfLines={1} style={[styles.chipText, { color: colors.text }]}>
+                          {category.name}
+                          {category.archived ? ` (${t('expenses.archived')})` : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {expense?.category.archived ? (
+                  <Text style={{ color: colors.textMuted }}>
+                    {t('expenses.form.archivedCategoryHint')}
+                  </Text>
+                ) : null}
+                <FieldError
+                  message={errors.categoryId ? t('expenses.validation.category') : undefined}
                 />
-              ))}
-            </View>
-          </View>
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="note"
-        render={({ field }) => (
-          <TextField
-            label={t('expenses.form.note')}
-            hint={t('common.optional')}
-            value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            multiline
-            maxLength={500}
-            style={styles.note}
-            error={errors.note ? t('expenses.validation.note') : undefined}
-            testID="expense-note"
+              </View>
+            )}
           />
-        )}
-      />
 
-      <Button
-        label={t('common.save')}
-        onPress={onSubmit}
-        loading={isSubmitting}
-        disabled={deleting}
-        icon="checkmark"
-        testID="expense-save"
-      />
-      {onDelete ? (
-        <Button
-          label={t('common.delete')}
-          variant="danger"
-          onPress={confirmDelete}
-          loading={deleting}
-          disabled={isSubmitting}
-          icon="trash-outline"
-          testID="expense-delete"
-        />
-      ) : null}
-    </ScrollView>
+          <Controller
+            control={control}
+            name="date"
+            render={({ field }) => (
+              <View style={styles.group}>
+                <FieldLabel>{t('expenses.form.date')}</FieldLabel>
+                <View style={styles.row}>
+                  {[
+                    { iso: today, label: t('expenses.form.today') },
+                    { iso: yesterdayIso(today), label: t('expenses.form.yesterday') },
+                  ].map((option) => (
+                    <Chip
+                      key={option.iso}
+                      label={option.label}
+                      selected={field.value === option.iso}
+                      onPress={() => field.onChange(option.iso)}
+                    />
+                  ))}
+                  {Platform.OS === 'ios' ? (
+                    <DateTimePicker
+                      value={fromIsoDate(field.value)}
+                      mode="date"
+                      display="compact"
+                      locale="tr-TR"
+                      maximumDate={fromIsoDate(today)}
+                      onChange={(_: DateTimePickerEvent, date?: Date) => {
+                        if (date) {
+                          field.onChange(toIsoDate(date));
+                        }
+                      }}
+                      testID="expense-date-picker"
+                    />
+                  ) : (
+                    <Chip
+                      label={formatDate(t, field.value)}
+                      selected
+                      onPress={() => setShowAndroidPicker(true)}
+                      testID="expense-date"
+                    />
+                  )}
+                </View>
+                {Platform.OS !== 'ios' && showAndroidPicker ? (
+                  <DateTimePicker
+                    value={fromIsoDate(field.value)}
+                    mode="date"
+                    maximumDate={fromIsoDate(today)}
+                    onChange={(event: DateTimePickerEvent, date?: Date) => {
+                      setShowAndroidPicker(false);
+                      if (event.type === 'set' && date) {
+                        field.onChange(toIsoDate(date));
+                      }
+                    }}
+                  />
+                ) : null}
+                <FieldError message={errors.date ? t('expenses.validation.date') : undefined} />
+              </View>
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="description"
+            render={({ field }) => (
+              <TextField
+                label={t('expenses.form.description')}
+                hint={t('common.optional')}
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                placeholder={t('expenses.form.descriptionPlaceholder')}
+                maxLength={140}
+                error={errors.description ? t('expenses.validation.description') : undefined}
+                testID="expense-description"
+              />
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="paymentMethod"
+            render={({ field }) => (
+              <View style={styles.group}>
+                <FieldLabel>{t('expenses.form.paymentMethod')}</FieldLabel>
+                <View style={styles.row}>
+                  {(['none', ...PAYMENT_METHODS] as const).map((method) => (
+                    <Chip
+                      key={method}
+                      label={t(`expenses.paymentMethods.${method}`)}
+                      selected={field.value === method}
+                      onPress={() => field.onChange(method)}
+                      testID={`payment-${method}`}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="note"
+            render={({ field }) => (
+              <TextField
+                label={t('expenses.form.note')}
+                hint={t('common.optional')}
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                multiline
+                maxLength={500}
+                style={styles.note}
+                error={errors.note ? t('expenses.validation.note') : undefined}
+                testID="expense-note"
+              />
+            )}
+          />
+
+          <Button
+            label={t('common.save')}
+            onPress={onSubmit}
+            loading={isSubmitting}
+            disabled={deleting}
+            icon="checkmark"
+            testID="expense-save"
+          />
+          {onDelete ? (
+            <Button
+              label={t('common.delete')}
+              variant="danger"
+              onPress={confirmDelete}
+              loading={deleting}
+              disabled={isSubmitting}
+              icon="trash-outline"
+              testID="expense-delete"
+            />
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
