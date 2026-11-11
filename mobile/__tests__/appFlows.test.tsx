@@ -1,4 +1,4 @@
-import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 import { Alert } from 'react-native';
 
 import type { Category, Expense } from '../src/api/types';
@@ -268,6 +268,19 @@ describe('expenses', () => {
     });
     expect(await screen.findByText(tr.expenses.saved)).toBeOnTheScreen();
     await waitFor(() => expect(screen.getByTestId('month-total')).toHaveTextContent('₺1.250,50'));
+  });
+
+  it('lays the form out below the iOS modal header and above the keyboard', async () => {
+    backend();
+    await renderRouter(APP_DIR, { initialUrl: '/expense/new' });
+
+    // iOS draws the modal header over the screen; without these the amount field sits under it
+    // (bug seen on iPhone) and the keyboard inset is computed in the wrong coordinates.
+    const form = await screen.findByTestId('expense-form');
+    expect(form.props.contentInsetAdjustmentBehavior).toBe('automatic');
+    expect(form.props.automaticallyAdjustKeyboardInsets).toBe(true);
+    // The amount field is the first field and stays inside the scrollable form.
+    expect(within(form).getByTestId('expense-amount')).toBeOnTheScreen();
   });
 
   it('does not send an invalid amount or a missing category', async () => {
