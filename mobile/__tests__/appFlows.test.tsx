@@ -270,18 +270,29 @@ describe('expenses', () => {
     await waitFor(() => expect(screen.getByTestId('month-total')).toHaveTextContent('₺1.250,50'));
   });
 
-  it('lays the form out below the iOS modal header and above the keyboard', async () => {
-    backend();
-    await renderRouter(APP_DIR, { initialUrl: '/expense/new' });
+  it.each([
+    ['new', '/expense/new'],
+    ['edit', '/expense/e-1'],
+  ])(
+    'keeps the %s form below the modal header, also with the keyboard open',
+    async (_screen, url) => {
+      backend([expense('e-1', '10.00')]);
+      await renderRouter(APP_DIR, { initialUrl: url });
 
-    // iOS draws the modal header over the screen; without these the amount field sits under it
-    // (bug seen on iPhone) and the keyboard inset is computed in the wrong coordinates.
-    const form = await screen.findByTestId('expense-form');
-    expect(form.props.contentInsetAdjustmentBehavior).toBe('automatic');
-    expect(form.props.automaticallyAdjustKeyboardInsets).toBe(true);
-    // The amount field is the first field and stays inside the scrollable form.
-    expect(within(form).getByTestId('expense-amount')).toBeOnTheScreen();
-  });
+      // The header inset comes from a SafeAreaView fed by a provider inside the screen (UIKit's
+      // safe area of the form's own frame), not from the ScrollView's automatic content inset:
+      // React Native clamps the offset to contentInset.top when the keyboard opens, which
+      // ignores the automatic inset and put the "Tutar" label under the header on iPhone.
+      const safeArea = await screen.findByTestId('expense-form-safe-area');
+      expect(safeArea.props.edges).toMatchObject({ top: 'additive', bottom: 'additive' });
+      const form = within(safeArea).getByTestId('expense-form');
+      expect(form.props.contentInsetAdjustmentBehavior ?? 'never').toBe('never');
+      expect(form.props.automaticallyAdjustKeyboardInsets).toBe(true);
+      // The amount label and field are the first things inside the form.
+      expect(within(form).getByText(tr.expenses.form.amount)).toBeOnTheScreen();
+      expect(within(form).getByTestId('expense-amount')).toBeOnTheScreen();
+    },
+  );
 
   it('does not send an invalid amount or a missing category', async () => {
     const { calls } = backend();
